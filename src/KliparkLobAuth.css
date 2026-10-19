@@ -1,0 +1,213 @@
+.kl{--p:#9c8cb9;
+    --p-dark:#6c5f8d;
+    --p-soft:#efeafd;
+    --neg:#ddd5fc;
+    --neg-ink:#a3246a;
+    --cli:#c7d3f8;
+    --cli-ink:#146c4a;
+    --ink:#1f1b33;
+    --mute:#605883;
+    --line:#dcd8ea;
+    --err:#c62b45;
+    --bg:#f6f4fc;
+/*font-family:"Nunito","Segoe UI",system-ui,sans-serif;*/
+font-family:"Space Mono", monospace;
+color:var(--ink);
+/* Fondo con degradados para que el blur se note */
+background:
+    radial-gradient(circle at 20% 30%, #baabd5 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, #c7d3f8 0%, transparent 45%),
+    radial-gradient(circle at 70% 15%, #ddd5fc 0%, transparent 35%),
+    var(--bg);
+min-height:100vh;
+display:flex;
+justify-content:center;
+padding:80px;
+box-sizing:border-box}
+.kl *{box-sizing:border-box}
+.kl-card{
+    width: 450px;
+    height: 820px;
+    /*max-width:600px;*/
+    /* Efecto blur / glassmorphism */
+    background:rgba(255, 255, 255, 0.55);
+    backdrop-filter:blur(12px);
+    -webkit-backdrop-filter:blur(12px);
+    border:1px solid rgba(255, 255, 255, 0.6);
+    border-radius:12px;
+    padding:70px 24px 24px;
+    box-shadow:0 12px 30px rgba(60, 46, 110, 0.625);
+    align-self:flex-start;
+    /*min-height:640px;*/
+    display:flex;
+    flex-direction:column}
+/* Opcional: desenfocar el panel completo (ej. mientras carga) */
+.kl-card.loading{
+    filter:blur(4px);
+    pointer-events:none}
+.kl h1{
+    font-size:30px;
+    margin:0 0 6px;
+    line-height:1.2}
+.kl p.sub{margin:0 0 22px;
+    color:var(--mute);
+    font-size:15px;
+    line-height:1.45}
+.kl-back{background:none;
+    border:0;
+    font-size:22px;
+    cursor:pointer;
+    color:var(--ink);
+    align-self:flex-start;
+    padding:4px 8px 4px 0;
+    margin-bottom:8px}
+.kl-logo{text-align:center;
+    margin:20px 0 10px}
+.kl-logo svg{width:76px;
+    height:76px}
+.kl-logo b{display:block;
+    font-size:30px;
+    color:var(--p);
+    margin-top:6px}
+.kl-logo span{color:var(--mute);
+    font-size:14px}
+.kl-field{margin-bottom:14px}
+.kl-field label{display:block;
+    font-size:14px;
+    font-weight:700;
+    margin-bottom:6px}
+.kl-input{display:flex;
+    align-items:center;
+    border:1.5px solid var(--line);
+    border-radius:14px;
+    background:#fff}
+.kl-input:focus-within{border-color:var(--p);
+    box-shadow:0 0 0 3px var(--p-soft)}
+.kl-input.bad{border-color:var(--err)}
+.kl-input input,.kl-input select{flex:1;
+    border:0;outline:0;
+    background:transparent;
+    font:inherit;
+    font-size:16px;
+    padding:14px;
+    min-width:0;
+    color:var(--ink)}
+.kl-input .pre{padding-left:14px;
+    color:var(--mute);
+    font-weight:700}
+.kl-eye{background:none;
+    border:0;
+    padding:0 14px;
+    cursor:pointer;
+    color:var(--p);
+    font:inherit;
+    font-size:13px;
+    font-weight:700}
+.kl-err{color:var(--err);
+    font-size:13px;
+    margin-top:5px}
+.kl-btn{width:100%;
+    border:0;
+    border-radius:14px;
+    padding:15px;
+    font:inherit;
+    font-size:16px;
+    font-weight:800;
+    cursor:pointer;
+    background:var(--p);
+    color:#fff;
+    margin-top: 40px}
+.kl-btn:hover{background:var(--p-dark)}
+.kl-btn:disabled{opacity:.6;
+    cursor:wait}
+.kl-btn.ghost{background:#fff;
+    color:var(--p);
+    border:1.5px solid var(--p)}
+.kl-btn.ghost:hover{background:var(--p-soft)}
+.kl-link{background:none;
+    border:0;
+    color:var(--p);
+    font:inherit;
+    font-weight:700;
+    cursor:pointer;
+    padding:8px;
+    text-decoration:underline}
+.kl-center{text-align:center;
+    color:var(--mute);
+    font-size:14px;
+    margin-top:auto;
+    padding-top:16px}
+.kl-seg{display:flex;
+    background:var(--bg);
+    border-radius:14px;
+    padding:4px;
+    margin-bottom:18px}
+.kl-seg button{flex:1;
+    border:0;
+    background:transparent;
+    padding:10px;
+    border-radius:11px;
+    font:inherit;
+    font-weight:700;
+    color:var(--mute);
+    cursor:pointer}
+.kl-seg button[aria-pressed=true]{background:#fff;
+    color:var(--ink);
+    box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.kl-seg.cli button[aria-pressed=true]{background:var(--cli);
+    color:var(--cli-ink)}
+.kl-seg.neg button[aria-pressed=true]{background:var(--neg);
+    color:var(--neg-ink)}
+.kl-role{display:flex;
+    gap:14px;
+    align-items:center;
+    width:100%;
+    text-align:left;
+    border:0;
+    border-radius:18px;
+    padding:18px;
+    margin-bottom:14px;
+    cursor:pointer;
+    font:inherit;
+    color:var(--ink)}
+.kl-role.neg{background:var(--neg)}.kl-role.cli{background:var(--cli)}
+.kl-role .ic{font-size:30px}
+.kl-role b{display:block;
+    font-size:17px}.kl-role small{color:var(--mute);
+        font-size:13px}
+.kl-role:hover{filter:brightness(.97)}
+.kl-code input{width:100%;
+    text-align:center;
+    font-size:28px;
+    letter-spacing:.5em;
+    padding:16px 0 16px .5em;
+    border:1.5px solid var(--line);
+    border-radius:14px;
+    font-family:inherit;
+    outline:0}
+.kl-code input:focus{border-color:var(--p);
+    box-shadow:0 0 0 3px var(--p-soft)}
+.kl-done{text-align:center;
+    margin:auto 0}
+.kl-badge{width:92px;
+    height:92px;
+    border-radius:50%;
+    background:var(--p);
+    color:#fff;
+    font-size:46px;
+    display:grid;
+    place-items:center;
+    margin:0 auto 18px}
+.kl-note{background:var(--neg);
+    color:var(--neg-ink);
+    border-radius:12px;
+    padding:12px;
+    font-size:14px;
+    margin:0 0 18px;
+    text-align:left}
+.kl-hint{font-size:12px;
+    color:var(--mute);
+    text-align:center;
+    margin-top:10px}
+.kl :focus-visible{outline:3px solid var(--p);
+    outline-offset:2px}
