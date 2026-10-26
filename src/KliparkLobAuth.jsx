@@ -1,5 +1,9 @@
 import { useState } from "react";
 import "./KliparkLobAuth.css";
+import { registerUser, loginUser, resetPassword, friendlyError } from "./authService";
+
+// El acceso por celular sigue siendo una simulación: se activa cuando conectemos Phone Auth de Firebase.
+const PHONE_LOGIN = false;
 
 
 const CATEGORIAS = ["Comida", "Bebidas", "Postres"];
@@ -10,7 +14,7 @@ const fakeApi = () => new Promise((r) => setTimeout(r, 600)); // Sustituir por t
 function Logo() {
   return (
     <div className="kl-logo">
-      <svg viewBox="0 0 64 64" fill="none" stroke="#5a3ec9" strokeWidth="3.5" strokeLinejoin="round" aria-hidden="true">
+      <svg viewBox="0 0 64 64" fill="none" stroke="#6b4fd8" strokeWidth="3.5" strokeLinejoin="round" aria-hidden="true">
         <path d="M8 24 14 10h36l6 14v4a8 8 0 0 1-16 0 8 8 0 0 1-16 0 8 8 0 0 1-16 0z" />
         <path d="M12 36v18h40V36M26 54V42h12v12" />
       </svg>
@@ -63,7 +67,7 @@ function Welcome({ go }) {
 }
 
 function Login({ go, role, setRole }) {
-  const [method, setMethod] = useState("cel");
+  const [method, setMethod] = useState(PHONE_LOGIN ? "cel" : "mail");
   const [f, setF] = useState({ cel: "", email: "", pass: "" });
   const [err, setErr] = useState({});
   const [busy, setBusy] = useState(false);
@@ -82,12 +86,21 @@ function Login({ go, role, setRole }) {
     }
     setErr(er);
     if (Object.keys(er).length) return;
+    if (useCel) { // Pendiente: Phone Auth de Firebase (hoy desactivado con PHONE_LOGIN)
+      setBusy(true);
+      await fakeApi();
+      setBusy(false);
+      return go("code", { after: "done", codeFor: `+52 ${f.cel}`, profile: { cel: f.cel } });
+    }
     setBusy(true);
-    await fakeApi();
-    setBusy(false);
-    if (useCel) go("code", { after: "done", codeFor: `+52 ${f.cel}`, profile: { cel: f.cel } });
-    else if (isNeg) go("code", { after: "done", codeFor: f.email, twoFactor: true, profile: { email: f.email } });
-    else go("done", { logged: true, profile: { email: f.email } });
+    try {
+      const profile = await loginUser(f.email, f.pass, role);
+      go("done", { logged: true, profile });
+    } catch (ex) {
+      setErr({ form: friendlyError(ex) });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -101,7 +114,7 @@ function Login({ go, role, setRole }) {
         <button type="button" aria-pressed={isNeg} onClick={() => setRole("negocio")}>Soy negocio</button>
       </div>
 
-      {!isNeg && (
+      {!isNeg && PHONE_LOGIN && (
         <div className="kl-seg" role="group" aria-label="Método">
           <button type="button" aria-pressed={method === "cel"} onClick={() => setMethod("cel")}>Celular</button>
           <button type="button" aria-pressed={method === "mail"} onClick={() => setMethod("mail")}>Correo</button>
@@ -121,11 +134,11 @@ function Login({ go, role, setRole }) {
         </>
       )}
 
+      {err.form && <div className="kl-err" role="alert">{err.form}</div>}
       <button className="kl-btn" disabled={busy}>
         {busy ? "Un momento…" : useCel ? "Enviar código" : "Entrar"}
       </button>
       {useCel && <p className="kl-hint">Te enviaremos un código por WhatsApp o SMS.</p>}
-      {isNeg && <p className="kl-hint">Por seguridad, te pediremos un código de verificación.</p>}
 
       <div className="kl-center">
         ¿No tienes cuenta? <button type="button" className="kl-link" onClick={() => go("role")}>Regístrate</button>
@@ -158,7 +171,7 @@ function Role({ go, setRole }) {
 
 function Register({ go, role }) {
   const isNeg = role === "negocio";
-  const [f, setF] = useState({ nombre: "", categoria: "", email: "", pass: "", cel: "" });
+  const [f, setF] = useState({ nombre: "", categoria: "", email: "", cel: "", pass: "" });
   const [err, setErr] = useState({});
   const [busy, setBusy] = useState(false);
   const set = (k) => (v) => setF({ ...f, [k]: v });
@@ -174,10 +187,14 @@ function Register({ go, role }) {
     setErr(er);
     if (Object.keys(er).length) return;
     setBusy(true);
-    await fakeApi();
-    setBusy(false);
-    go(isNeg ? "code" : "done", { after: "done", codeFor: f.email, registered: true,
-      profile: { nombre: f.nombre.trim(), email: f.email, cel: f.cel, categoria: f.categoria } });
+    try {
+      const profile = await registerUser({ role, ...f });
+      go("done", { registered: true, profile });
+    } catch (ex) {
+      setErr({ form: friendlyError(ex) });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -203,8 +220,9 @@ function Register({ go, role }) {
       <Field label="Contraseña" type="password" autoComplete="new-password" value={f.pass} onChange={set("pass")} error={err.pass} />
       <Field label="Celular" prefix="+52" type="tel" inputMode="numeric" value={f.cel}
         onChange={(v) => set("cel")(v.replace(/\D/g, "").slice(0, 10))} error={err.cel} />
+    
 
-
+      {err.form && <div className="kl-err" role="alert">{err.form}</div>}
       <button className="kl-btn" disabled={busy}>{busy ? "Creando…" : "Crear cuenta"}</button>
       <div className="kl-center" style={{ paddingTop: 10 }}>
         ¿Ya tienes cuenta? <button type="button" className="kl-link" onClick={() => go("login")}>Iniciar sesión</button>
@@ -247,7 +265,12 @@ function Forgot({ go }) {
   const submit = async (e) => {
     e.preventDefault();
     if (!emailOk(email)) return setErr("Escribe un correo válido.");
-    await fakeApi();
+    try {
+      await resetPassword(email);
+    } catch (ex) {
+      // Por privacidad no revelamos si el correo existe.
+      if (ex.code !== "auth/user-not-found") return setErr(friendlyError(ex));
+    }
     setOk(true);
   };
   return (
@@ -256,7 +279,7 @@ function Forgot({ go }) {
       <h1>Recuperar contraseña</h1>
       {ok ? (
         <>
-          <p className="sub">Si el correo tiene una cuenta, recibirás un enlace para crear una contraseña nueva. El enlace caduca en 15 minutos.</p>
+          <p className="sub">Si el correo tiene una cuenta, recibirás un enlace para crear una contraseña nueva. El enlace caduca en poco tiempo.</p>
           <button type="button" className="kl-btn" onClick={() => go("login")}>Volver a iniciar sesión</button>
         </>
       ) : (
@@ -281,7 +304,7 @@ function Done({ ctx, role, finish }) {
         {guest
           ? "Puedes ver negocios y productos. Para pagar, chatear o ganar puntos, inicia sesión."
           : ctx.registered
-          ? "Tu cuenta ha sido creada correctamente."
+          ? "Tu cuenta ha sido creada. Te enviamos un correo para verificarla."
           : neg ? "Entrando a tu panel de negocio." : "Entrando a tu inicio."}
       </p>
       {neg && ctx.registered && (
