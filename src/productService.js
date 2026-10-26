@@ -18,11 +18,12 @@ export async function listProducts(negocioId) {
     .sort((a, b) => a.name.localeCompare(b.name, "es"));
 }
 
-const clean = ({ name, price, description, categoria, imagen, available }) => ({
+const clean = ({ name, price, description, categoria, imagen, available, stock }) => ({
   name: name.trim(),
   price: Number(price),
   description: description.trim(),
   categoria: categoria || "",
+  stock: Math.max(0, Math.floor(Number(stock) || 0)), // existencias (unidades)
   available: available ?? true,
   ...(imagen ? { imagen } : {}),
 });

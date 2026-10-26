@@ -6,7 +6,7 @@ import {
   sendEmailVerification,
   updateProfile,
 } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { ensureNegocio } from "./marketService";
 
@@ -19,6 +19,14 @@ export async function getProfile(uid) {
   const { creadoEn, ...data } = snap.data();
   if (data.rol === "negocio") ensureNegocio(uid, data).catch(() => {}); // perfil público (también para cuentas anteriores)
   return { uid, ...data };
+}
+
+/** Guarda los datos editables del perfil del usuario (users/{uid}). */
+export async function saveProfile(uid, { nombre, cel, direccion }) {
+  const patch = { nombre: nombre.trim(), cel: cel || "", direccion: (direccion || "").trim().slice(0, 200) };
+  await updateDoc(userRef(uid), patch);
+  if (auth.currentUser) updateProfile(auth.currentUser, { displayName: patch.nombre }).catch(() => {});
+  return patch;
 }
 
 /** Crea la cuenta en Authentication y su perfil (con el rol) en Firestore. */

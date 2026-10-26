@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { createProduct, updateProduct, removeProduct, compressImage, friendlyProductError } from "./productService";
-import "./KliparkDashboard.jsx"; // estilos de paneles y formularios
 
 const CATEGORIAS = ["Comida", "Bebidas", "Postres"];
 const money = (n) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
-const EMPTY = { name: "", price: "", description: "", categoria: "", imagen: "" };
+const LOW_STOCK = 5; // aviso de pocas unidades
+const EMPTY = { name: "", price: "", description: "", categoria: "", imagen: "", stock: "" };
+const stockLabel = (p, limit = LOW_STOCK) => typeof p.stock !== "number" ? "Sin control de existencias" : p.stock === 0 ? "Agotado" : p.stock <= limit ? `⚠ Pocas unidades: ${p.stock}` : `Existencias: ${p.stock}`;
 
 /** Catálogo del negocio: lista, alta, edición y borrado de productos (con foto y descripción). */
-export default function BusinessProducts({ negocioId, items, onChange, loadError }) {
+export default function BusinessProducts({ negocioId, items, onChange, loadError, lowStock = LOW_STOCK }) {
   const [form, setForm] = useState(EMPTY);
   const [editing, setEditing] = useState(null);
   const [msg, setMsg] = useState(loadError || "");
@@ -40,10 +41,12 @@ export default function BusinessProducts({ negocioId, items, onChange, loadError
     const price = Number(form.price);
     if (!form.name.trim() || !Number.isFinite(price) || price <= 0) return setMsg("Escribe un nombre y un precio mayor que cero.");
     if (form.description.length > 500) return setMsg("La descripción puede tener hasta 500 caracteres.");
+    const stock = Number(form.stock);
+    if (form.stock === "" || !Number.isInteger(stock) || stock < 0) return setMsg("Las existencias deben ser un número entero, 0 o mayor.");
     setBusy(true);
     try {
       if (editing) {
-        const patch = { name: form.name.trim(), price, description: form.description.trim(), categoria: form.categoria, imagen: form.imagen };
+        const patch = { name: form.name.trim(), price, description: form.description.trim(), categoria: form.categoria, imagen: form.imagen, stock };
         await updateProduct(editing, patch);
         onChange(items.map((p) => (p.id === editing ? { ...p, ...patch } : p)));
         setMsg("Producto actualizado.");
@@ -62,9 +65,19 @@ export default function BusinessProducts({ negocioId, items, onChange, loadError
 
   function startEdit(p) {
     setEditing(p.id);
-    setForm({ name: p.name, price: String(p.price), description: p.description || "", categoria: p.categoria || "", imagen: p.imagen || "" });
+    setForm({ name: p.name, price: String(p.price), description: p.description || "", categoria: p.categoria || "", imagen: p.imagen || "", stock: String(p.stock ?? "") });
     setFileKey((k) => k + 1);
     setMsg("");
+  }
+
+  async function changeStock(p, delta) {
+    const stock = Math.max(0, (p.stock || 0) + delta);
+    try {
+      await updateProduct(p.id, { stock });
+      onChange(items.map((x) => (x.id === p.id ? { ...x, stock } : x)));
+    } catch (ex) {
+      setMsg(friendlyProductError(ex));
+    }
   }
 
   async function toggle(p) {
@@ -102,6 +115,10 @@ export default function BusinessProducts({ negocioId, items, onChange, loadError
               <h3>{p.name}</h3>
               <p className="muted">{money(p.price)}{p.categoria ? ` · ${p.categoria}` : ""}</p>
               {p.description && <p className="muted">{p.description}</p>}
+              <p className="muted"><strong>{stockLabel(p, lowStock)}</strong>{" "}
+                <button type="button" className="link-btn" aria-label={`Quitar una unidad de ${p.name}`} onClick={() => changeStock(p, -1)}>− 1</button>{" "}
+                <button type="button" className="link-btn" aria-label={`Agregar una unidad de ${p.name}`} onClick={() => changeStock(p, 1)}>+ 1</button>
+              </p>
               <p className="muted">
                 <label><input type="checkbox" checked={p.available} onChange={() => toggle(p)} /> Disponible</label>{" "}
                 <button type="button" className="link-btn" onClick={() => startEdit(p)}>Editar</button>{" "}
@@ -122,6 +139,9 @@ export default function BusinessProducts({ negocioId, items, onChange, loadError
         </label>
         <label className="field">Descripción
           <textarea maxLength={500} rows={3} value={form.description} onChange={set("description")} placeholder="Agua fresca de 500 ml, sin conservadores." />
+        </label>
+        <label className="field">Existencias (unidades disponibles)
+          <input required type="number" min="0" step="1" value={form.stock} onChange={set("stock")} placeholder="20" />
         </label>
         <label className="field">Categoría
           <select value={form.categoria} onChange={set("categoria")}>

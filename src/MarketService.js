@@ -1,4 +1,4 @@
-import { collection, doc, onSnapshot, addDoc, updateDoc, setDoc, getDoc, query, where, serverTimestamp } from "firebase/firestore";
+import { collection, doc, onSnapshot, addDoc, updateDoc, setDoc, getDoc, query, where, serverTimestamp, writeBatch } from "firebase/firestore";
 import { db } from "./firebase";
 
 /* ---------- Negocios (perfil público) ---------- */
@@ -40,6 +40,42 @@ export const createOrder = (order) =>
   addDoc(collection(db, "pedidos"), { ...order, estado: 0, creadoEn: serverTimestamp() });
 
 export const advanceOrder = (id, estado) => updateDoc(doc(db, "pedidos", id), { estado });
+
+/** Existencias después de surtir un pedido (solo productos con control de existencias). */
+export const stockAfter = (products, items) => products.map((p) => {
+  const item = items.find((i) => i.id === p.id);
+  return item && typeof p.stock === "number" ? { ...p, stock: Math.max(0, p.stock - item.quantity) } : p;
+});
+
+/** Cancela el pedido; si ya se había aceptado, devuelve las existencias al inventario. */
+export async function cancelOrder(order, products) {
+  let updated = products;
+  const batch = writeBatch(db);
+  if (order.estado >= 1) {
+    updated = products.map((p) => {
+      const item = order.items.find((i) => i.id === p.id);
+      return item && typeof p.stock === "number" ? { ...p, stock: p.stock + item.quantity } : p;
+    });
+    updated.forEach((p, i) => {
+      if (p.stock !== products[i].stock) batch.update(doc(db, "productos", p.id), { stock: p.stock });
+    });
+  }
+  batch.update(doc(db, "pedidos", order.id), { estado: 4 });
+  await batch.commit();
+  return updated;
+}
+
+/** Acepta el pedido y descuenta las existencias en una sola operación. Devuelve el catálogo actualizado. */
+export async function acceptOrder(order, products) {
+  const updated = stockAfter(products, order.items);
+  const batch = writeBatch(db);
+  updated.forEach((p, i) => {
+    if (p.stock !== products[i].stock) batch.update(doc(db, "productos", p.id), { stock: p.stock });
+  });
+  batch.update(doc(db, "pedidos", order.id), { estado: 1 });
+  await batch.commit();
+  return updated;
+}
 
 export function friendlyMarketError(e) {
   switch (e?.code) {

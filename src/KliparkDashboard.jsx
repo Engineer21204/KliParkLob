@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Store, MapPin, ShoppingBag, Compass, Package, LayoutDashboard, ReceiptText, Utensils, Coffee, CakeSlice, Search, ArrowRight, ArrowUpRight, HeartHandshake, Clock, Bike, Grid2X2 } from './KliparkIcons';
+import { Store, MapPin, User, ShoppingBag, Compass, Package, LayoutDashboard, ReceiptText, Utensils, Coffee, CakeSlice, Search, ArrowRight, ArrowUpRight, HeartHandshake, Clock, Bike, Grid2X2 } from './Icons';
 import './KliparkDashboard.css';
 import BusinessProducts from './BusinessProducts';
+import BusinessProfile from './BusinessProfile';
+import ClientProfile from './ClientProfile';
 import { listProducts, friendlyProductError } from './productService';
-import { watchNegocios, watchNegocio, updateNegocio, watchOrders, createOrder, advanceOrder, friendlyMarketError } from './marketService';
+import { watchNegocios, watchNegocio, updateNegocio, watchOrders, createOrder, advanceOrder, acceptOrder, cancelOrder, friendlyMarketError } from './marketService';
 
 const DELIVERY_FEE = 20; // Envío fijo por ahora
-const statusLabels = ['Esperando aceptación', 'En preparación', 'Listo para entregar', 'Entregado'];
+const statusLabels = ['Esperando aceptación', 'En preparación', 'Listo para entregar', 'Entregado', 'Cancelado'];
 const ICONS = { Comida: Utensils, Bebidas: Coffee, Postres: CakeSlice };
 const COVERS = { Postres: 'cake', Bebidas: 'coffee' };
+const soldOut = p => !p.available || (typeof p.stock === 'number' && p.stock <= 0);
 const decorate = n => ({ ...n, Icon: ICONS[n.categoria] || Store, cover: COVERS[n.categoria] || '' });
 const money = value => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 }).format(value);
 
@@ -20,17 +23,19 @@ function Intro({ title, subtitle, children }) {
 }
 function Hero({ store, onExplore }) {
   const Icon = store?.Icon || Store;
-  return <section className="hero"><div><div className="eyebrow">{store ? (store.categoria || 'NEGOCIO').toUpperCase() : 'DE TU BARRIO A TU PUERTA'}</div><h2>{store ? <>Sabor local,<br />hecho para ti.</> : <>Pequeños negocios.<br />Grandes sabores.</>}</h2><p>{store ? `${store.abierto === false ? 'Cerrado temporalmente' : 'Abierto'} · Envío ${money(DELIVERY_FEE)}` : 'Descubre lo que tu comunidad tiene para ti y apoya a quienes le dan vida.'}</p>{onExplore && <button type="button" onClick={onExplore}>Descubrir negocios <ArrowRight aria-hidden="true" /></button>}</div><div className="art" aria-hidden="true"><div className="orb"><Icon /></div><span className="floating">Hecho aquí. Hecho con cariño.</span></div></section>;
+  return <section className="hero"><div><div className="eyebrow">{store ? (store.categoria || 'NEGOCIO').toUpperCase() : 'DE TU BARRIO A TU PUERTA'}</div><h2>{store ? <>Sabor local,<br />hecho para ti.</> : <>Pequeños negocios.<br />Grandes sabores.</>}</h2><p>{store ? `${store.abierto === false ? 'Cerrado temporalmente' : 'Abierto'} · Envío ${money(DELIVERY_FEE)}` : 'Descubre lo que tu comunidad tiene para ti y apoya a quienes le dan vida.'}</p>{onExplore && <button type="button" onClick={onExplore}>Descubrir negocios <ArrowRight aria-hidden="true" /></button>}</div><div className="art" aria-hidden="true"><div className="orb">{store?.logo ? <img className="orb-logo" src={store.logo} alt="" /> : <Icon />}</div><span className="floating">Hecho aquí. Hecho con cariño.</span></div></section>;
 }
-function OrderCard({ order, business = false, onAdvance }) {
+function OrderCard({ order, business = false, onAdvance, onCancel }) {
   return <section className="panel">
     <div className="row"><h2>Pedido #{order.id.slice(0, 6).toUpperCase()}</h2><span className="badge">{statusLabels[order.estado]}</span></div>
     <p className="muted" style={{ marginTop: 8 }}>{business ? `Cliente: ${order.clienteNombre}` : order.negocioNombre} · {order.recoger ? 'Recoger en local' : 'Entrega a domicilio'}</p>
+    {business && !order.recoger && order.direccion && <p className="muted">Entregar en: {order.direccion}</p>}
+    {business && order.clienteCel && <p className="muted">Teléfono del cliente: {order.clienteCel}</p>}
     {order.items.map(item => <div className="order row" key={item.id}><span>{item.quantity} × {item.name}</span><strong>{money(item.price * item.quantity)}</strong></div>)}
     <div className="total row"><strong>Total</strong><h2>{money(order.total)}</h2></div>
     {business
-      ? order.estado < 3 && <Button onClick={() => onAdvance(order)}>{['Aceptar y preparar', 'Marcar como listo', 'Confirmar entrega'][order.estado]}</Button>
-      : <ol className="timeline">{['Pedido recibido', 'Confirmación del negocio', 'Preparación finalizada', order.recoger ? 'Recogido en local' : 'Entregado'].map((label, i) => <li key={label} className={i <= order.estado ? 'done' : ''}>{label}</li>)}</ol>}
+      ? order.estado < 3 && <><Button onClick={() => onAdvance(order)}>{['Aceptar y preparar', 'Marcar como listo', 'Confirmar entrega'][order.estado]}</Button>{' '}<Button secondary onClick={() => onCancel(order)}>Cancelar pedido</Button></>
+      : order.estado === 4 ? <p className="notice">El negocio canceló este pedido.</p> : <ol className="timeline">{['Pedido recibido', 'Confirmación del negocio', 'Preparación finalizada', order.recoger ? 'Recogido en local' : 'Entregado'].map((label, i) => <li key={label} className={i <= order.estado ? 'done' : ''}>{label}</li>)}</ol>}
   </section>;
 }
 
@@ -38,6 +43,7 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
   const role = accountRole === 'negocio' ? 'business' : 'client';
   const guest = accountRole === 'invitado';
   const uid = profile.uid;
+  const [me, setMe] = useState(profile); // datos del usuario (se actualizan al editar el perfil)
   const [page, setPage] = useState(role === 'business' ? 'Resumen' : 'Explorar');
   const [negocios, setNegocios] = useState(null);      // todos los negocios (cliente)
   const [myNegocio, setMyNegocio] = useState(null);    // mi negocio (negocio)
@@ -52,6 +58,7 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
   const [pickup, setPickup] = useState(false);
   const [notice, setNotice] = useState('');
   const [sending, setSending] = useState(false);
+  const [toCancel, setToCancel] = useState(null); // pedido pendiente de confirmar cancelación
   const fail = e => setNotice(friendlyMarketError(e));
 
   useEffect(() => {
@@ -80,10 +87,14 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
   const fee = pickup ? 0 : DELIVERY_FEE;
   const total = subtotal + fee;
   const completed = orders.filter(o => o.estado === 3);
+  const lowLimit = myNegocio?.umbral ?? 5;
+  const low = (products || []).filter(p => typeof p.stock === 'number' && p.stock <= lowLimit);
   const visible = (negocios || []).filter(n => (category === 'Todo' || n.categoria === category) && n.nombre.toLocaleLowerCase('es').includes(query.toLocaleLowerCase('es')));
 
   function addProduct(product) {
     if (cart && cart.storeId !== store.id) { setNotice('Tu carrito pertenece a otro negocio. Finaliza o vacía ese carrito antes de comprar aquí.'); return; }
+    const inCart = cart?.items.find(item => item.id === product.id)?.quantity || 0;
+    if (typeof product.stock === 'number' && inCart >= product.stock) { setNotice('No hay más existencias de este producto.'); return; }
     setCart(previous => {
       const items = previous?.items || [];
       const exists = items.some(item => item.id === product.id);
@@ -101,30 +112,45 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
   async function confirmOrder() {
     if (guest) { onRequestLogin?.(); return; }
     if (!cart || sending) return;
+    if (!pickup && !me.direccion) { setNotice('Agrega tu dirección de entrega en Mi perfil, o elige Recoger.'); setPage('Mi perfil'); return; }
     setSending(true);
     try {
-      await createOrder({ negocioId: cart.storeId, negocioNombre: cart.storeName, clienteId: uid, clienteNombre: profile.nombre || 'Cliente', items: cart.items, subtotal, envio: fee, total, recoger: pickup });
+      await createOrder({ negocioId: cart.storeId, negocioNombre: cart.storeName, clienteId: uid, clienteNombre: me.nombre || 'Cliente', clienteCel: me.cel || '', direccion: pickup ? '' : me.direccion, items: cart.items, subtotal, envio: fee, total, recoger: pickup });
       setCart(null); setPage('Mi pedido'); setNotice('¡Pedido enviado! El negocio lo verá de inmediato.');
     } catch (e) { fail(e); } finally { setSending(false); }
   }
-  const advance = order => advanceOrder(order.id, order.estado + 1).catch(fail);
+  const advance = async order => {
+    try {
+      if (order.estado === 0 && products) setProducts(await acceptOrder(order, products)); // acepta y descuenta existencias
+      else await advanceOrder(order.id, order.estado + 1);
+    } catch (e) { fail(e); }
+  };
+  const confirmCancel = async () => {
+    const order = toCancel;
+    setToCancel(null);
+    try {
+      const list = await cancelOrder(order, products || []);
+      if (products) setProducts(list);
+      setNotice(order.estado >= 1 ? 'Pedido cancelado. Las existencias se devolvieron al inventario.' : 'Pedido cancelado.');
+    } catch (e) { fail(e); }
+  };
   const toggleOpen = () => updateNegocio(uid, { abierto: !open }).catch(fail);
-  const navigation = role === 'client' ? [['Explorar', Compass], ['Mi pedido', Package], ['Carrito', ShoppingBag]] : [['Resumen', LayoutDashboard], ['Pedidos', ReceiptText], ['Productos', Utensils], ['Mi negocio', Store]];
+  const navigation = role === 'client' ? [['Explorar', Compass], ['Mi pedido', Package], ['Carrito', ShoppingBag], ...(guest ? [] : [['Mi perfil', User]])] : [['Resumen', LayoutDashboard], ['Pedidos', ReceiptText], ['Productos', Utensils], ['Mi negocio', Store]];
   const backPage = role === 'business' ? 'Mi negocio' : 'Explorar';
 
   return <div id="cerca-pro">
     <div className="app">
-      <header className="top"><div className="brand"><Store aria-hidden="true" />KliparkLob<small>Tu tienda, más cerca de ti</small></div><div className="place"><MapPin aria-hidden="true" /><div>Entregar en<strong>Centro · Chilpancingo</strong></div></div><div className="top-actions">{role === 'client' && <button type="button" className="cart" onClick={() => setPage('Carrito')}><ShoppingBag aria-hidden="true" />Carrito · {quantity}</button>}<span className="avatar" aria-label={guest ? 'Invitado' : profile.nombre || 'Tu cuenta'}>{guest ? 'IN' : (profile.nombre || (role === 'client' ? 'Cliente' : 'Negocio')).slice(0, 2).toUpperCase()}</span><button type="button" className="session-button" onClick={onLogout}>{guest ? 'Salir' : 'Cerrar sesión'}</button></div></header>
+      <header className="top"><div className="brand"><Store aria-hidden="true" />KliparkLob<small>Tu tienda, más cerca de ti</small></div>{role === 'client' && <div className="place"><MapPin aria-hidden="true" /><div>Entregar en<strong>{me.direccion || 'Agrega tu dirección en Mi perfil'}</strong></div></div>}<div className="top-actions">{role === 'client' && <button type="button" className="cart" onClick={() => setPage('Carrito')}><ShoppingBag aria-hidden="true" />Carrito · {quantity}</button>}<span className="avatar" aria-label={guest ? 'Invitado' : me.nombre || 'Tu cuenta'}>{guest ? 'IN' : (me.nombre || (role === 'client' ? 'Cliente' : 'Negocio')).slice(0, 2).toUpperCase()}</span><button type="button" className="session-button" onClick={onLogout}>{guest ? 'Salir' : 'Cerrar sesión'}</button></div></header>
       <div className="layout"><nav className="side" aria-label="Navegación principal"><div className="side-label">{role === 'client' ? 'DESCUBRE TU ZONA' : 'TU NEGOCIO'}</div>{navigation.map(([label, Icon]) => <button type="button" key={label} aria-pressed={page === label} onClick={() => { setPage(label); setNotice(''); }}><Icon aria-hidden="true" />{label}</button>)}<div className="local-note"><HeartHandshake aria-hidden="true" /><strong>Crezcamos juntos</strong>El comercio de tu barrio, ahora más cerca.</div></nav>
       <main>{guest && <div className="notice row"><span>Estás explorando como invitado.</span><Button secondary onClick={onRequestLogin}>Iniciar sesión para comprar</Button></div>}<div aria-live="polite">{notice && <div className="notice">{notice}</div>}</div>
 
       {role === 'client' && page === 'Explorar' && <>
-        <Intro title="¿Qué se te antoja hoy?" subtitle={profile.nombre ? `Hola, ${profile.nombre}. Tus favoritos locales te esperan.` : 'Tus favoritos locales, a un pedido de distancia.'}><label className="search"><Search aria-hidden="true" /><input aria-label="Buscar negocios" placeholder="Busca tu negocio favorito" value={query} onChange={e => setQuery(e.target.value)} /></label></Intro>
+        <Intro title="¿Qué se te antoja hoy?" subtitle={me.nombre ? `Hola, ${me.nombre}. Tus favoritos locales te esperan.` : 'Tus favoritos locales, a un pedido de distancia.'}><label className="search"><Search aria-hidden="true" /><input aria-label="Buscar negocios" placeholder="Busca tu negocio favorito" value={query} onChange={e => setQuery(e.target.value)} /></label></Intro>
         <Hero onExplore={() => document.getElementById('cerca-stores')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })} />
         <div className="filters">{[['Todo', Grid2X2], ['Comida', Utensils], ['Bebidas', Coffee], ['Postres', CakeSlice]].map(([label, Icon]) => <button type="button" key={label} aria-pressed={category === label} onClick={() => setCategory(label)}><Icon aria-hidden="true" />{label}</button>)}</div>
         <div className="section-heading"><h2>Cerca de ti</h2><span>Negocios de tu comunidad</span></div>
         {negocios === null && <p className="muted">Cargando negocios…</p>}
-        <div className="grid" id="cerca-stores">{visible.map(s => <article className="store" key={s.id}><div className={`cover ${s.cover}`}><span className="tag">{s.abierto === false ? 'Cerrado temporalmente' : s.categoria}</span><s.Icon aria-hidden="true" /></div><div className="store-content"><div className="row"><h3>{s.nombre}</h3></div><p className="muted">{s.descripcion || `Negocio local · ${s.categoria}`}</p><span className="badge green">Envío {money(DELIVERY_FEE)}</span><button type="button" onClick={() => { setStoreId(s.id); setPage('Tienda'); setNotice(''); }}>Explorar menú <ArrowUpRight aria-hidden="true" /></button></div></article>)}</div>
+        <div className="grid" id="cerca-stores">{visible.map(s => <article className="store" key={s.id}><div className={`cover ${s.cover}`}><span className="tag">{s.abierto === false ? 'Cerrado temporalmente' : s.categoria}</span>{s.logo ? <img className="cover-logo" src={s.logo} alt="" /> : <s.Icon aria-hidden="true" />}</div><div className="store-content"><div className="row"><h3>{s.nombre}</h3></div><p className="muted">{s.descripcion || `Negocio local · ${s.categoria}`}{s.horario ? ` · ${s.horario}` : ''}</p><span className="badge green">Envío {money(DELIVERY_FEE)}</span><button type="button" onClick={() => { setStoreId(s.id); setPage('Tienda'); setNotice(''); }}>Explorar menú <ArrowUpRight aria-hidden="true" /></button></div></article>)}</div>
         {negocios && !visible.length && <p className="muted">{negocios.length ? 'No encontramos negocios con esos filtros.' : 'Aún no hay negocios registrados. Cuando un negocio se registre, aparecerá aquí.'}</p>}
       </>}
 
@@ -133,8 +159,8 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
         <div className="orders"><section className="panel"><div className="section-heading"><h2>Menú</h2></div>
           {shownProducts === null && <p className="muted">Cargando productos…</p>}
           {shownProducts?.length === 0 && <p className="muted">Este negocio aún no tiene productos.</p>}
-          {shownProducts?.map(product => <div className="product" key={product.id}><div className="product-art">{product.imagen ? <img src={product.imagen} alt="" /> : <store.Icon aria-hidden="true" />}</div><div className="product-info"><h3>{product.name}</h3><p className="muted">{product.description}</p><strong>{money(product.price)}</strong></div><Button disabled={role === 'business' || !product.available || store.abierto === false} onClick={() => addProduct(product)}>{role === 'business' ? 'Vista previa' : !product.available ? 'Agotado' : store.abierto === false ? 'Cerrado' : 'Agregar +'}</Button></div>)}
-        </section><section className="panel"><h2>Tu pedido</h2><div className="time"><Bike aria-hidden="true" />Envío {money(DELIVERY_FEE)}</div><p className="muted">También puedes recoger en el local.</p><div className="total row"><strong>{quantity} producto(s)</strong><strong>{money(subtotal)}</strong></div>{role === 'client' && <Button onClick={() => setPage('Carrito')}>Revisar carrito</Button>}</section></div>
+          {shownProducts?.map(product => <div className="product" key={product.id}><div className="product-art">{product.imagen ? <img src={product.imagen} alt="" /> : <store.Icon aria-hidden="true" />}</div><div className="product-info"><h3>{product.name}</h3><p className="muted">{product.description}</p><strong>{money(product.price)}</strong>{typeof product.stock === 'number' && product.stock > 0 && product.stock <= (store.umbral ?? 5) && <span className="badge" style={{ marginLeft: 8 }}>¡Quedan {product.stock}!</span>}</div><Button disabled={role === 'business' || soldOut(product) || store.abierto === false} onClick={() => addProduct(product)}>{role === 'business' ? 'Vista previa' : soldOut(product) ? 'Agotado' : store.abierto === false ? 'Cerrado' : 'Agregar +'}</Button></div>)}
+        </section><section className="panel"><h2>Tu pedido</h2><div className="time"><Bike aria-hidden="true" />Envío {money(DELIVERY_FEE)}</div><p className="muted">También puedes recoger en el local.</p>{store.telefono && <p className="muted">Teléfono: {store.telefono}</p>}{store.horario && <p className="muted">Horario: {store.horario}</p>}<div className="total row"><strong>{quantity} producto(s)</strong><strong>{money(subtotal)}</strong></div>{role === 'client' && <Button onClick={() => setPage('Carrito')}>Revisar carrito</Button>}</section></div>
       </> : <section className="panel"><p className="muted">Cargando negocio…</p><Button secondary onClick={() => setPage(backPage)}>Volver</Button></section>)}
 
       {role === 'client' && page === 'Carrito' && <>
@@ -144,18 +170,20 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
 
       {role === 'client' && page === 'Mi pedido' && <><Intro title="Mis pedidos" subtitle="Cada paso, claro y a la vista." /><div className="orders">{orders.map(order => <OrderCard key={order.id} order={order} />)}</div>{!orders.length && <section className="panel"><h2>Tu primer pedido te espera</h2><Button onClick={() => setPage('Explorar')}>Explorar negocios</Button></section>}</>}
 
+      {role === 'client' && page === 'Mi perfil' && !guest && <><Intro title="Mi perfil" subtitle="Tus datos y tu dirección de entrega." /><ClientProfile uid={uid} me={me} orders={orders} onSaved={patch => setMe(previous => ({ ...previous, ...patch }))} onSeeOrders={() => setPage('Mi pedido')} /></>}
+
       {role === 'business' && page === 'Resumen' && <>
         <Intro title="Todo listo para vender." subtitle="Tus pedidos y tu operación, en un solo lugar."><button type="button" className="badge green" onClick={toggleOpen}>{open ? '● Abierto · Pausar' : '● Pausado · Abrir'}</button></Intro>
         <div className="stats"><div className="stat"><span className="muted">Ventas completadas</span><strong>{money(completed.reduce((sum, o) => sum + o.subtotal, 0))}</strong><small>{completed.length} pedidos completados</small></div><div className="stat"><span className="muted">Pedidos por atender</span><strong>{orders.filter(o => o.estado < 3).length}</strong><small>Pedidos de tu negocio</small></div><div className="stat"><span className="muted">Pedidos totales</span><strong>{orders.length}</strong><small>Desde que abriste</small></div></div>
-        <div className="orders"><section className="panel"><h2>Pedidos activos</h2><p className="muted" style={{ margin: '12px 0 20px' }}>{orders.length ? 'Consulta el estado y confirma los pedidos.' : 'Aún no hay pedidos. Los nuevos pedidos de tus clientes aparecerán aquí.'}</p><Button onClick={() => setPage('Pedidos')}>Gestionar pedidos</Button></section><section className="panel"><span className="badge green">OPERACIÓN DEL LOCAL</span><h2 style={{ marginTop: 16 }}>Tu catálogo al día</h2><p className="muted" style={{ margin: '10px 0 20px' }}>Mantén disponibles solo los productos que puedes preparar hoy.</p><Button secondary onClick={() => setPage('Productos')}>Administrar productos</Button></section></div>
+        <div className="orders"><section className="panel"><h2>Pedidos activos</h2><p className="muted" style={{ margin: '12px 0 20px' }}>{orders.length ? 'Consulta el estado y confirma los pedidos.' : 'Aún no hay pedidos. Los nuevos pedidos de tus clientes aparecerán aquí.'}</p><Button onClick={() => setPage('Pedidos')}>Gestionar pedidos</Button></section><section className="panel"><span className="badge green">OPERACIÓN DEL LOCAL</span><h2 style={{ marginTop: 16 }}>Tu catálogo al día</h2><p className="muted" style={{ margin: '10px 0 20px' }}>Mantén disponibles solo los productos que puedes preparar hoy.</p>{low.length > 0 && <p className="notice">⚠ Pocas existencias: {low.map(p => `${p.name} (${p.stock})`).join(', ')}</p>}<Button secondary onClick={() => setPage('Productos')}>Administrar productos</Button></section></div>
       </>}
 
-      {role === 'business' && page === 'Pedidos' && <><Intro title="Centro de pedidos" subtitle="Confirma, prepara y entrega sin perder el ritmo." /><div className="orders">{orders.map(order => <OrderCard key={order.id} order={order} business onAdvance={advance} />)}</div>{!orders.length && <section className="panel"><h2>Sin pedidos por ahora</h2><p className="muted">Los pedidos de tu negocio aparecerán aquí.</p></section>}</>}
+      {role === 'business' && page === 'Pedidos' && <><Intro title="Centro de pedidos" subtitle="Confirma, prepara y entrega sin perder el ritmo." /><div className="orders">{orders.map(order => <OrderCard key={order.id} order={order} business onAdvance={advance} onCancel={setToCancel} />)}</div>{!orders.length && <section className="panel"><h2>Sin pedidos por ahora</h2><p className="muted">Los pedidos de tu negocio aparecerán aquí.</p></section>}</>}
 
-      {role === 'business' && page === 'Productos' && <><Intro title="Tu menú, siempre listo." subtitle="Agrega productos con foto, descripción y precio." />{uid && <BusinessProducts negocioId={uid} items={products} onChange={setProducts} loadError={productsError} />}</>}
+      {role === 'business' && page === 'Productos' && <><Intro title="Tu menú, siempre listo." subtitle="Agrega productos con foto, descripción y precio." />{uid && <BusinessProducts negocioId={uid} items={products} onChange={setProducts} loadError={productsError} lowStock={lowLimit} />}</>}
 
-      {role === 'business' && page === 'Mi negocio' && <><Intro title="Un local con identidad." subtitle="Así te encontrarán tus clientes." />{myNegocio ? <div className="orders"><section className="panel"><span className="badge green">{open ? 'Abierto' : 'Pausado'}</span><h2 style={{ marginTop: 16 }}>{myNegocio.nombre}</h2><p className="muted" style={{ margin: '10px 0' }}>{myNegocio.categoria}{myNegocio.descripcion ? ` · ${myNegocio.descripcion}` : ''}</p><div className="time"><Bike aria-hidden="true" />Entrega a domicilio y recogida</div><Button secondary onClick={toggleOpen}>{open ? 'Pausar nuevos pedidos' : 'Abrir negocio'}</Button></section><section className="panel"><h2>Vista del cliente</h2><p className="muted" style={{ margin: '12px 0 20px' }}>Comprueba la presentación de tu menú.</p><Button onClick={() => setPage('Escaparate')}>Ver escaparate</Button></section></div> : <section className="panel"><p className="muted">Cargando tu negocio…</p></section>}</>}
+      {role === 'business' && page === 'Mi negocio' && <><Intro title="Un local con identidad." subtitle="Así te encontrarán tus clientes." />{myNegocio ? <><div className="orders"><section className="panel"><span className="badge green">{open ? 'Abierto' : 'Pausado'}</span><h2 style={{ marginTop: 16 }}>{myNegocio.nombre}</h2><p className="muted" style={{ margin: '10px 0' }}>{myNegocio.categoria}{myNegocio.descripcion ? ` · ${myNegocio.descripcion}` : ''}</p><div className="time"><Bike aria-hidden="true" />Entrega a domicilio y recogida</div><Button secondary onClick={toggleOpen}>{open ? 'Pausar nuevos pedidos' : 'Abrir negocio'}</Button></section><section className="panel"><h2>Vista del cliente</h2><p className="muted" style={{ margin: '12px 0 20px' }}>Comprueba la presentación de tu menú.</p><Button onClick={() => setPage('Escaparate')}>Ver escaparate</Button></section></div><BusinessProfile uid={uid} negocio={myNegocio} /></> : <section className="panel"><p className="muted">Cargando tu negocio…</p></section>}</>}
       </main></div>
-    </div><p className="foot">KliparkLob · Tu tienda, más cerca de ti</p>
+    </div>{toCancel && <div className="modal-bg" onClick={() => setToCancel(null)}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="cancel-title" onClick={e => e.stopPropagation()} onKeyDown={e => e.key === 'Escape' && setToCancel(null)}><h2 id="cancel-title">¿Cancelar este pedido?</h2><p className="muted">El cliente verá que el pedido fue cancelado.{toCancel.estado >= 1 ? ' Las existencias descontadas se devolverán al inventario.' : ''}</p><div className="modal-actions"><button type="button" className="secondary" autoFocus onClick={() => setToCancel(null)}>No, conservar</button><button type="button" className="danger" onClick={confirmCancel}>Sí, cancelar pedido</button></div></div></div>}<p className="foot">KliparkLob · Tu tienda, más cerca de ti</p>
   </div>;
 }
