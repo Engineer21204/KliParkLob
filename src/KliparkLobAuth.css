@@ -1,4 +1,5 @@
-.kl{--p:#9c8cb9;
+
+/*.kl{--p:#9c8cb9;
     --p-dark:#6c5f8d;
     --p-soft:#efeafd;
     --neg:#ddd5fc;
@@ -9,9 +10,11 @@
     --mute:#605883;
     --line:#dcd8ea;
     --err:#c62b45;
-    --bg:#f6f4fc;
-/*font-family:"Nunito","Segoe UI",system-ui,sans-serif;*/
-font-family:"Space Mono", monospace;
+    --bg:#FFC259;
+    --bg:#f6f4fc;*/
+
+
+.kl{font-family:"Space Mono", monospace;
 color:var(--ink);
 /* Fondo con degradados para que el blur se note */
 background:
@@ -212,3 +215,69 @@ box-sizing:border-box}
     margin-top:10px}
 .kl :focus-visible{outline:3px solid var(--p);
     outline-offset:2px}
+
+    /* ===== Paleta KliparkLob ===== */
+.kl{--p:#D61800;
+    --p-dark:#A31200;
+    --p-soft:#FFEAB3;
+    --neg:#FBD0C6;
+    --neg-ink:#520D1C;
+    --cli:#FFEAB3;
+    --cli-ink:#6B4300;
+    --ink:#2A0A10;
+    --mute:#7A4A4F;
+    --line:#EBD3A6;
+    --err:#B3001B;
+    --bg:#FFF6DC;
+    /*background:linear-gradient(190deg,#3b010b,#770523 50%,#75162b)}*/
+    background: radial-gradient(circle at 20% 30%, #3b010b 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, #770523 0%, transparent 45%),
+    radial-gradient(circle at 70% 15%, #75162b 0%, transparent 35%);
+}
+    
+.kl-card{box-shadow:0 14px 40px rgba(5, 1, 2, 0.179);
+    background: var(--bg);}
+.kl-logo svg{stroke:#4e0f1d}
+.kl-logo b{color:#f2e5c6}
+
+/* ===== Login: fondo con foto y tarjeta de cristal ===== */
+.kl{--p:#231919;--p-dark:#3A2A2A;--p-soft:rgba(255,255,255,.2);--ink:#fff;--mute:rgba(255,255,255,.88);--line:rgba(255,255,255,.6);--err:#FFB9B9;--bg:#CFC7BB;position:relative;overflow:hidden; isolation:isolate; align-items: center; background:#CFC7BB}
+.kl::before{content:""; display:block; position:absolute; inset: -40px; width: auto; height: auto; margin: 0; border-radius:0; opacity: 1; z-index: -1; pointer-events:none; background: linear-gradient(rgba(35,25,25,.1), rgba(35,25,25, .1)), url('/public/opcion1-fondo.png') center/cover no-repeat; filter: blur(13px) saturate(.9); transform: scale(1.05)}
+.kl-card{align-self:center;border-radius:30px;color:#fff;background:linear-gradient(150deg,rgba(255,255,255,.08),rgba(255,255,255,.02) 55%),rgba(35, 25, 25, 0.074);border:1px solid rgba(255,255,255,.35);backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%);box-shadow:inset 1px 1px 0 rgba(255,255,255,.4),0 30px 70px rgba(0, 0, 0, 0.186)}
+
+.kl h1,.kl-logo b{background:none;-webkit-text-fill-color:#fff;color:#fff}
+.kl p.sub,.kl-logo span{color:rgba(255,255,255,.88)}
+.kl-logo svg{stroke:#fff}
+.kl-back{color:#fff}
+.kl-field label{color:#fff}
+.kl-err{color:#FFB9B9}
+
+.kl-input{background:transparent;border:0;border-bottom:1px solid rgba(255,255,255,.6);border-radius:0}
+.kl-input:focus-within{border-bottom-color:#fff;box-shadow:0 1px 0 #fff}
+.kl-input.bad{border-bottom-color:#FFB9B9}
+.kl-input input,.kl-input select,.kl-input .pre{color:#fff}
+.kl-input input,.kl-input select{padding:14px 2px}
+.kl-input .pre{padding:0 6px 0 2px}
+.kl-input input::placeholder{color:rgba(255,255,255,.85)}
+.kl-input option{color:#231919;background:#fff}
+.kl-eye{color:#fff;text-decoration:underline}
+
+.kl-btn{background:#231919;color:#fff;border-radius:99px;box-shadow:0 12px 26px rgba(0,0,0,.35)}
+.kl-btn:hover{background:#3A2A2A}
+.kl-btn.ghost{background:#fff;color:#231919;border:0;box-shadow:0 10px 22px rgba(0,0,0,.2)}
+.kl-btn.ghost:hover{background:#F3EEE8}
+.kl-link{color:#fff}
+.kl-center,.kl-hint{color:rgba(255,255,255,.88)}
+
+.kl-seg{background:rgba(255,255,255,.14)}
+.kl-seg button{color:rgba(255,255,255,.9)}
+.kl-seg button[aria-pressed=true],.kl-seg.cli button[aria-pressed=true],.kl-seg.neg button[aria-pressed=true]{background:#fff;color:#231919;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+
+.kl-role.neg,.kl-role.cli{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.35);color:#fff}
+.kl-role small{color:rgba(255,255,255,.88)}
+.kl-role:hover{background:rgba(255,255,255,.22);filter:none}
+
+.kl-code input{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.45);color:#fff}
+.kl-badge{background:#fff;color:#231919}
+.kl-note{background:rgba(255,255,255,.16);color:#fff}
+.kl :focus-visible{outline:3px solid #fff;outline-offset:3px}

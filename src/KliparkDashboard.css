@@ -193,3 +193,34 @@ html,body,#root{margin:0;width:100%;min-height:100%}
 #cerca-pro .orb-logo{display:block;width:100%;height:100%;object-fit:cover;border-radius:50%}
 #cerca-pro .place strong{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #cerca-pro .field input:disabled{opacity:.7;cursor:not-allowed}
+
+/* ===== Paleta KliparkLob: vino, rojo, mostaza y crema ===== */
+#cerca-pro{--bg:#FFF6DC;--panel:#fff;--text:#2A0A10;--muted:#7A4A4F;--line:#EBD3A6;--accent:#D61800;--soft:#FFEAB3;--green:#520D1C;color-scheme:light}
+#cerca-pro .top{background:linear-gradient(90deg,#520D1C,#7A1020);border-bottom:0}
+#cerca-pro .brand,#cerca-pro .brand svg{color:#EDAE01}
+#cerca-pro .brand small,#cerca-pro .place{color:#FFEAB3}
+#cerca-pro .place strong{color:#fff}
+#cerca-pro .place svg{color:#EDAE01}
+#cerca-pro .avatar,#cerca-pro .cart{background:#EDAE01;color:#520D1C}
+#cerca-pro .session-button{color:#FFEAB3}
+#cerca-pro .side button[aria-pressed=true]{background:#FFEAB3;color:#520D1C;font-weight:700;box-shadow:inset 3px 0 0 #D61800}
+#cerca-pro .hero{background:linear-gradient(120deg,#520D1C,#D61800 62%,#EDAE01)}
+#cerca-pro .eyebrow{color:#EDAE01}
+#cerca-pro .hero p{color:#fff}
+#cerca-pro .hero button{background:#EDAE01;color:#520D1C}
+#cerca-pro .orb{background:linear-gradient(135deg,#FFEAB3,#EDAE01);box-shadow:0 14px 0 #520D1C33,0 0 0 18px #ffffff14}
+#cerca-pro .orb svg,#cerca-pro .floating{color:#520D1C}
+#cerca-pro .primary{background:#D61800;color:#fff}
+#cerca-pro .primary:hover{background:#B01400}
+#cerca-pro .badge,#cerca-pro .notice{color:#520D1C}
+#cerca-pro .green{background:#FFEAB3;color:#520D1C}
+#cerca-pro .cover{background:#FFEAB3;color:#D61800}
+#cerca-pro .cover.cake{background:#FBD0C6;color:#8A1A10}
+#cerca-pro .cover.coffee{background:#F8E3A0;color:#7A4F00}
+#cerca-pro .tag{background:#fff;color:#520D1C}
+#cerca-pro .field input:focus,#cerca-pro .field textarea:focus,#cerca-pro .field select:focus{outline:3px solid #FFEAB3;border-color:#D61800}
+#cerca-pro :focus-visible{outline:3px solid #D61800;outline-offset:3px}
+#cerca-pro .top :focus-visible{outline-color:#FFEAB3}
+#cerca-pro .danger{background:#520D1C}
+#cerca-pro .danger:hover{background:#3A0913}
+#cerca-pro .modal-bg{background:rgba(42,10,16,.6)}
