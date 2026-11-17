@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Store, MapPin, User, ShoppingBag, Compass, Package, LayoutDashboard, ReceiptText, Utensils, Coffee, CakeSlice, Search, ArrowRight, ArrowUpRight, HeartHandshake, Clock, Bike, Grid2X2 } from './Icons';
+import React, { useState, useEffect, useRef } from 'react';
+import { Store, MapPin, User, ShoppingBag, Compass, Package, LayoutDashboard, ReceiptText, Utensils, Coffee, CakeSlice, Search, ArrowUpRight, Bike, Grid2X2 } from './Icons';
 import './KliparkDashboard.css';
 import BusinessProducts from './BusinessProducts';
 import BusinessProfile from './BusinessProfile';
@@ -15,16 +15,109 @@ const soldOut = p => !p.available || (typeof p.stock === 'number' && p.stock <= 
 const decorate = n => ({ ...n, Icon: ICONS[n.categoria] || Store, cover: COVERS[n.categoria] || '' });
 const money = value => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 }).format(value);
 
+// ids SIN acento, igual que en la base de datos
+const DIAS_RESUMEN = [
+  { id: 'lunes', nombre: 'Lun' },
+  { id: 'martes', nombre: 'Mar' },
+  { id: 'miercoles', nombre: 'Mié' },
+  { id: 'jueves', nombre: 'Jue' },
+  { id: 'viernes', nombre: 'Vie' },
+  { id: 'sabado', nombre: 'Sáb' },
+  { id: 'domingo', nombre: 'Dom' }
+];
+
+const goTo = id => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
 function Button({ children, secondary = false, className = '', ...props }) {
   return <button type="button" className={`${secondary ? 'secondary' : 'primary'} ${className}`} {...props}>{children}</button>;
 }
 function Intro({ title, subtitle, children }) {
   return <div className="intro"><div><h1>{title}</h1><p className="muted">{subtitle}</p></div>{children}</div>;
 }
-function Hero({ store, onExplore }) {
-  const Icon = store?.Icon || Store;
-  return <section className="hero"><div><div className="eyebrow">{store ? (store.categoria || 'NEGOCIO').toUpperCase() : 'DE TU BARRIO A TU PUERTA'}</div><h2>{store ? <>Sabor local,<br />hecho para ti.</> : <>Pequeños negocios.<br />Grandes sabores.</>}</h2><p>{store ? `${store.abierto === false ? 'Cerrado temporalmente' : 'Abierto'} · Envío ${money(DELIVERY_FEE)}` : 'Descubre lo que tu comunidad tiene para ti y apoya a quienes le dan vida.'}</p>{onExplore && <button type="button" onClick={onExplore}>Descubrir negocios <ArrowRight aria-hidden="true" /></button>}</div><div className="art" aria-hidden="true"><div className="orb">{store?.logo ? <img className="orb-logo" src={store.logo} alt="" /> : <Icon />}</div><span className="floating">Hecho aquí. Hecho con cariño.</span></div></section>;
+
+/* Galería simple con cambio automático (portada de la tienda) */
+function Gallery({ photos, fallback: Fallback }) {
+  const [i, setI] = useState(0);
+  const n = photos.length;
+  useEffect(() => {
+    if (n < 2) return;
+    const t = setInterval(() => setI(p => (p + 1) % n), 4500);
+    return () => clearInterval(t);
+  }, [n]);
+  if (!n) return <div className="gal-empty"><Fallback aria-hidden="true" /></div>;
+  return (
+    <div className="gal">
+      <div className="gal-track" style={{ transform: `translateX(-${i * 100}%)` }}>
+        {photos.map((src, k) => <img key={k} src={src} alt="" loading={k === 0 ? 'eager' : 'lazy'} />)}
+      </div>
+      {n > 1 && <div className="gal-dots">{photos.map((_, k) => <button type="button" key={k} aria-label={`Foto ${k + 1}`} className={k === i ? 'on' : ''} onClick={() => setI(k)} />)}</div>}
+    </div>
+  );
 }
+
+/* Portada de la pantalla de la tienda */
+function StoreHero({ store, products, onBack, canOrder }) {
+  const Icon = store.Icon || Store;
+  const photos = [store.portada, ...(products || []).filter(p => p.imagen).map(p => p.imagen)].filter(Boolean).slice(0, 5);
+  const list = photos.length ? photos : store.logo ? [store.logo] : [];
+  const closed = store.abierto === false;
+  return (
+    <section className="sh">
+      <div className="sh-media">
+        <Gallery photos={list} fallback={Icon} />
+        <div className="sh-shade" />
+        <button type="button" className="sh-back" onClick={onBack}>‹ Volver</button>
+        <div className="sh-info">
+          <span className={`chip ${closed ? 'off' : ''}`}>{closed ? 'Cerrado temporalmente' : 'Abierto'}</span>
+          <h1>{store.nombre}</h1>
+          <p>{store.categoria || 'Negocio local'}{store.descripcion ? ` · ${store.descripcion}` : ''}</p>
+          <div className="sh-actions">
+            <button type="button" className="sh-cta" onClick={() => goTo('sv-menu')}>{canOrder ? 'Hacer pedido' : 'Ver menú'}</button>
+            <button type="button" className="sh-ghost" onClick={() => goTo('sv-info')}>Horario y envío</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* Tarjeta pequeña: foto + nombre */
+function StoreTile({ store, photo, onOpen, tabIndex = 0 }) {
+  const closed = store.abierto === false;
+  return (
+    <button type="button" className="tile" onClick={onOpen} tabIndex={tabIndex}>
+      <div className="tile-img">
+        {photo ? <img src={photo} alt="" loading="lazy" /> : <store.Icon aria-hidden="true" />}
+        <span className={`tile-st ${closed ? 'off' : ''}`}>{closed ? 'Cerrado' : 'Abierto'}</span>
+      </div>
+      <strong>{store.nombre}</strong>
+      <small>{store.categoria || 'Negocio local'}</small>
+    </button>
+  );
+}
+
+/* Carrusel compacto de negocios: se mueve solo, en bucle continuo */
+function StoreStrip({ stores, photoOf, onOpen }) {
+  if (!stores.length) return null;
+  // Repite la lista hasta que cada tanda mida lo suficiente para llenar la pantalla
+  const reps = Math.max(1, Math.ceil(8 / stores.length));
+  const set = Array.from({ length: reps }, () => stores).flat();
+  const seconds = Math.max(20, set.length * 4.5);
+  return (
+    <section className="strip" aria-label="Negocios destacados">
+      <div className="strip-move" style={{ animationDuration: `${seconds}s` }}>
+        {[0, 1].map(copy => (
+          <div className="strip-set" key={copy} aria-hidden={copy === 1}>
+            {set.map((s, k) => (
+              <StoreTile key={`${copy}-${k}-${s.id}`} store={s} photo={photoOf(s)} onOpen={() => onOpen(s.id)} tabIndex={copy === 1 ? -1 : 0} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function OrderCard({ order, business = false, onAdvance, onCancel }) {
   return <section className="panel">
     <div className="row"><h2>Pedido #{order.id.slice(0, 6).toUpperCase()}</h2><span className="badge">{statusLabels[order.estado]}</span></div>
@@ -52,12 +145,14 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
   const [productsError, setProductsError] = useState('');
   const [storeId, setStoreId] = useState(null);
   const [storeProducts, setStoreProducts] = useState(null);
+  const [covers, setCovers] = useState({});            // fotos de productos por negocio
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('Todo');
   const [cart, setCart] = useState(null);
   const [pickup, setPickup] = useState(false);
   const [notice, setNotice] = useState('');
   const [sending, setSending] = useState(false);
+  const [railOpen, setRailOpen] = useState(false);   // menú lateral expandido (táctil)
   const [toCancel, setToCancel] = useState(null); // pedido pendiente de confirmar cancelación
   const fail = e => setNotice(friendlyMarketError(e));
 
@@ -78,8 +173,21 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
     setStoreProducts(null);
     listProducts(storeId).then(setStoreProducts).catch(e => { setStoreProducts([]); fail(e); });
   }, [page, storeId]);
+  // Trae hasta 4 fotos de productos por negocio para las tarjetas
+  useEffect(() => {
+    if (role !== 'client' || !negocios) return;
+    let alive = true;
+    negocios.forEach(n => {
+      if (covers[n.id] !== undefined) return;
+      listProducts(n.id)
+        .then(list => { if (alive) setCovers(c => ({ ...c, [n.id]: list.filter(p => p.imagen).slice(0, 4).map(p => p.imagen) })); })
+        .catch(() => { if (alive) setCovers(c => ({ ...c, [n.id]: [] })); });
+    });
+    return () => { alive = false; };
+  }, [role, negocios]);
 
-  const open = myNegocio ? myNegocio.abierto !== false : true;
+  const manualOpen = myNegocio ? myNegocio.abierto !== false : true;
+  const open = manualOpen;
   const store = role === 'business' ? myNegocio : negocios?.find(n => n.id === storeId);
   const shownProducts = role === 'business' ? products : storeProducts;
   const quantity = cart?.items.reduce((sum, item) => sum + item.quantity, 0) || 0;
@@ -89,7 +197,10 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
   const completed = orders.filter(o => o.estado === 3);
   const lowLimit = myNegocio?.umbral ?? 5;
   const low = (products || []).filter(p => typeof p.stock === 'number' && p.stock <= lowLimit);
-  const visible = (negocios || []).filter(n => (category === 'Todo' || n.categoria === category) && n.nombre.toLocaleLowerCase('es').includes(query.toLocaleLowerCase('es')));
+  const visible = (negocios || []).filter(n => (category === 'Todo' || n.categoria === category) && (n.nombre || '').toLocaleLowerCase('es').includes(query.toLocaleLowerCase('es')));
+
+  const photoOf = s => s.portada || covers[s.id]?.[0] || s.logo || '';
+  const openStore = id => { setStoreId(id); setPage('Tienda'); setNotice(''); };
 
   function addProduct(product) {
     if (cart && cart.storeId !== store.id) { setNotice('Tu carrito pertenece a otro negocio. Finaliza o vacía ese carrito antes de comprar aquí.'); return; }
@@ -134,33 +245,98 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
       setNotice(order.estado >= 1 ? 'Pedido cancelado. Las existencias se devolvieron al inventario.' : 'Pedido cancelado.');
     } catch (e) { fail(e); }
   };
-  const toggleOpen = () => updateNegocio(uid, { abierto: !open }).catch(fail);
-  const navigation = role === 'client' ? [['Explorar', Compass], ['Mi pedido', Package], ['Carrito', ShoppingBag], ...(guest ? [] : [['Mi perfil', User]])] : [['Resumen', LayoutDashboard], ['Pedidos', ReceiptText], ['Productos', Utensils], ['Mi negocio', Store]];
+  const toggleOpen = () => updateNegocio(uid, { abierto: !manualOpen }).catch(fail);
+  const pending = orders.filter(o => o.estado < 3).length;
+  const navigation = role === 'client'
+    ? [['Explorar', Compass, 'Negocios cerca de ti'], ['Mi pedido', Package, 'Sigue tus pedidos'], ...(guest ? [] : [['Mi perfil', User, 'Tus datos y dirección']])]
+    : [['Resumen', LayoutDashboard, 'Tu operación del día'], ['Pedidos', ReceiptText, pending ? `${pending} por atender` : 'Sin pendientes'], ['Productos', Utensils, 'Tu menú y existencias'], ['Mi negocio', Store, 'Perfil y horario']];
+  const go = label => { setPage(label); setNotice(''); setRailOpen(false); };
   const backPage = role === 'business' ? 'Mi negocio' : 'Explorar';
 
   return <div id="cerca-pro">
     <div className="app">
-      <header className="top"><div className="brand"><Store aria-hidden="true" />KliparkLob<small>Tu tienda, más cerca de ti</small></div>{role === 'client' && <div className="place"><MapPin aria-hidden="true" /><div>Entregar en<strong>{me.direccion || 'Agrega tu dirección en Mi perfil'}</strong></div></div>}<div className="top-actions">{role === 'client' && <button type="button" className="cart" onClick={() => setPage('Carrito')}><ShoppingBag aria-hidden="true" />Carrito · {quantity}</button>}<span className="avatar" aria-label={guest ? 'Invitado' : me.nombre || 'Tu cuenta'}>{guest ? 'IN' : (me.nombre || (role === 'client' ? 'Cliente' : 'Negocio')).slice(0, 2).toUpperCase()}</span><button type="button" className="session-button" onClick={onLogout}>{guest ? 'Salir' : 'Cerrar sesión'}</button></div></header>
-      <div className="layout"><nav className="side" aria-label="Navegación principal"><div className="side-label">{role === 'client' ? 'DESCUBRE TU ZONA' : 'TU NEGOCIO'}</div>{navigation.map(([label, Icon]) => <button type="button" key={label} aria-pressed={page === label} onClick={() => { setPage(label); setNotice(''); }}><Icon aria-hidden="true" />{label}</button>)}<div className="local-note"><HeartHandshake aria-hidden="true" /><strong>Crezcamos juntos</strong>El comercio de tu barrio, ahora más cerca.</div></nav>
+      <aside className={`rail ${railOpen ? 'open' : ''}`} aria-label="Navegación principal">
+        <button type="button" className="rail-logo" onClick={() => setRailOpen(o => !o)} aria-expanded={railOpen} aria-label="Mostrar u ocultar menú">
+          <span className="rail-ico"><Store aria-hidden="true" /></span>
+          <span className="rail-txt"><b>KliparkLob</b><small>Tu tienda, más cerca</small></span>
+        </button>
+
+        <nav className="rail-nav">
+          {navigation.map(([label, Icon, hint]) => (
+            <button type="button" key={label} className="rail-item" aria-pressed={page === label} aria-label={label} title={label} onClick={() => go(label)}>
+              <span className="rail-ico"><Icon aria-hidden="true" />{label === 'Pedidos' && pending > 0 && <i className="rail-dot">{pending}</i>}</span>
+              <span className="rail-txt"><b>{label}</b><small>{hint}</small></span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="rail-bottom">
+          {role === 'client' && (
+            <button type="button" className="rail-item cart" aria-pressed={page === 'Carrito'} aria-label="Carrito" title="Carrito" onClick={() => go('Carrito')}>
+              <span className="rail-ico"><ShoppingBag aria-hidden="true" />{quantity > 0 && <i className="rail-dot">{quantity}</i>}</span>
+              <span className="rail-txt"><b>Carrito</b><small>{quantity ? `${quantity} producto(s) · ${money(subtotal)}` : 'Aún vacío'}</small></span>
+            </button>
+          )}
+          <div className="rail-user">
+            <span className="avatar" aria-label={guest ? 'Invitado' : me.nombre || 'Tu cuenta'}>{guest ? 'IN' : (me.nombre || (role === 'client' ? 'Cliente' : 'Negocio')).slice(0, 2).toUpperCase()}</span>
+            <span className="rail-txt"><b>{guest ? 'Invitado' : me.nombre || (role === 'client' ? 'Cliente' : 'Negocio')}</b><small>{role === 'client' ? 'Cuenta de cliente' : 'Cuenta de negocio'}</small></span>
+          </div>
+          <button type="button" className="rail-item out" aria-label={guest ? 'Salir' : 'Cerrar sesión'} title={guest ? 'Salir' : 'Cerrar sesión'} onClick={onLogout}>
+            <span className="rail-ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></svg></span>
+            <span className="rail-txt"><b>{guest ? 'Salir' : 'Cerrar sesión'}</b><small>Hasta pronto</small></span>
+          </button>
+        </div>
+      </aside>
+
+      <div className="kl-main">
       <main>{guest && <div className="notice row"><span>Estás explorando como invitado.</span><Button secondary onClick={onRequestLogin}>Iniciar sesión para comprar</Button></div>}<div aria-live="polite">{notice && <div className="notice">{notice}</div>}</div>
 
       {role === 'client' && page === 'Explorar' && <>
-        <Intro title="¿Qué se te antoja hoy?" subtitle={me.nombre ? `Hola, ${me.nombre}. Tus favoritos locales te esperan.` : 'Tus favoritos locales, a un pedido de distancia.'}><label className="search"><Search aria-hidden="true" /><input aria-label="Buscar negocios" placeholder="Busca tu negocio favorito" value={query} onChange={e => setQuery(e.target.value)} /></label></Intro>
-        <Hero onExplore={() => document.getElementById('cerca-stores')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })} />
-        <div className="filters">{[['Todo', Grid2X2], ['Comida', Utensils], ['Bebidas', Coffee], ['Postres', CakeSlice]].map(([label, Icon]) => <button type="button" key={label} aria-pressed={category === label} onClick={() => setCategory(label)}><Icon aria-hidden="true" />{label}</button>)}</div>
-        <div className="section-heading"><h2>Cerca de ti</h2><span>Negocios de tu comunidad</span></div>
+        <div className="ex-bar">
+          <div>
+            <h1>{me.nombre ? `Hola, ${me.nombre}. ¿Qué se te antoja?` : '¿Qué se te antoja hoy?'}</h1>
+            <p className="ex-addr"><MapPin aria-hidden="true" />{me.direccion || 'Agrega tu dirección en Mi perfil'}</p>
+          </div>
+          <label className="search"><Search aria-hidden="true" /><input aria-label="Buscar negocios" placeholder="Busca tu negocio favorito" value={query} onChange={e => setQuery(e.target.value)} /></label>
+        </div>
+
         {negocios === null && <p className="muted">Cargando negocios…</p>}
-        <div className="grid" id="cerca-stores">{visible.map(s => <article className="store" key={s.id}><div className={`cover ${s.cover}`}><span className="tag">{s.abierto === false ? 'Cerrado temporalmente' : s.categoria}</span>{s.logo ? <img className="cover-logo" src={s.logo} alt="" /> : <s.Icon aria-hidden="true" />}</div><div className="store-content"><div className="row"><h3>{s.nombre}</h3></div><p className="muted">{s.descripcion || `Negocio local · ${s.categoria}`}{s.horario ? ` · ${s.horario}` : ''}</p><span className="badge green">Envío {money(DELIVERY_FEE)}</span><button type="button" onClick={() => { setStoreId(s.id); setPage('Tienda'); setNotice(''); }}>Explorar menú <ArrowUpRight aria-hidden="true" /></button></div></article>)}</div>
-        {negocios && !visible.length && <p className="muted">{negocios.length ? 'No encontramos negocios con esos filtros.' : 'Aún no hay negocios registrados. Cuando un negocio se registre, aparecerá aquí.'}</p>}
+        <StoreStrip stores={visible} photoOf={photoOf} onOpen={openStore} />
+
+        <div className="filters">{[['Todo', Grid2X2], ['Comida', Utensils], ['Bebidas', Coffee], ['Postres', CakeSlice]].map(([label, Icon]) =>
+          <button type="button" key={label} aria-pressed={category === label} onClick={() => setCategory(label)}><Icon aria-hidden="true" />{label}</button>)}</div>
+
+        <div className="section-heading"><h2>Todos los negocios</h2><span>{visible.length} cerca de ti</span></div>
+        <div className="tile-grid" id="cerca-stores">
+          {visible.map(s => <StoreTile key={s.id} store={s} photo={photoOf(s)} onOpen={() => openStore(s.id)} />)}
+        </div>
+        {negocios && !visible.length && <p className="muted">No encontramos negocios con esa búsqueda.</p>}
       </>}
 
       {((role === 'client' && page === 'Tienda') || (role === 'business' && page === 'Escaparate')) && (store ? <>
-        <Intro title={store.nombre} subtitle={store.descripcion || `Negocio local · ${store.categoria}`}><Button secondary onClick={() => setPage(backPage)}>Volver</Button></Intro><Hero store={store} />
-        <div className="orders"><section className="panel"><div className="section-heading"><h2>Menú</h2></div>
+        <StoreHero store={store} products={shownProducts} onBack={() => setPage(backPage)} canOrder={role === 'client' && store.abierto !== false} />
+        <div className="orders"><section className="panel" id="sv-menu"><div className="section-heading"><h2>Menú</h2></div>
           {shownProducts === null && <p className="muted">Cargando productos…</p>}
           {shownProducts?.length === 0 && <p className="muted">Este negocio aún no tiene productos.</p>}
           {shownProducts?.map(product => <div className="product" key={product.id}><div className="product-art">{product.imagen ? <img src={product.imagen} alt="" /> : <store.Icon aria-hidden="true" />}</div><div className="product-info"><h3>{product.name}</h3><p className="muted">{product.description}</p><strong>{money(product.price)}</strong>{typeof product.stock === 'number' && product.stock > 0 && product.stock <= (store.umbral ?? 5) && <span className="badge" style={{ marginLeft: 8 }}>¡Quedan {product.stock}!</span>}</div><Button disabled={role === 'business' || soldOut(product) || store.abierto === false} onClick={() => addProduct(product)}>{role === 'business' ? 'Vista previa' : soldOut(product) ? 'Agotado' : store.abierto === false ? 'Cerrado' : 'Agregar +'}</Button></div>)}
-        </section><section className="panel"><h2>Tu pedido</h2><div className="time"><Bike aria-hidden="true" />Envío {money(DELIVERY_FEE)}</div><p className="muted">También puedes recoger en el local.</p>{store.telefono && <p className="muted">Teléfono: {store.telefono}</p>}{store.horario && <p className="muted">Horario: {store.horario}</p>}<div className="total row"><strong>{quantity} producto(s)</strong><strong>{money(subtotal)}</strong></div>{role === 'client' && <Button onClick={() => setPage('Carrito')}>Revisar carrito</Button>}</section></div>
+        </section>
+        <section className="panel" id="sv-info">
+          <h2>Tu pedido</h2>
+          <div className="time"><Bike aria-hidden="true" />Envío {money(DELIVERY_FEE)}</div>
+          <p className="muted">También puedes recoger en el local.</p>
+          {store.telefono && <p className="muted">Teléfono: {store.telefono}</p>}
+          {store.horario && typeof store.horario === 'object' && (
+            <div className="hours">
+              <strong>Horario</strong>
+              {DIAS_RESUMEN.map(({ id, nombre }) => {
+                const d = store.horario[id];
+                return <div key={id} className="hours-row"><span>{nombre}</span><span>{d?.activo && d?.apertura && d?.cierre ? `${d.apertura} - ${d.cierre}` : 'Cerrado'}</span></div>;
+              })}
+            </div>
+          )}
+          <div className="total row"><strong>{quantity} producto(s)</strong><strong>{money(subtotal)}</strong></div>
+          {role === 'client' && <Button onClick={() => setPage('Carrito')}>Revisar carrito</Button>}
+        </section></div>
       </> : <section className="panel"><p className="muted">Cargando negocio…</p><Button secondary onClick={() => setPage(backPage)}>Volver</Button></section>)}
 
       {role === 'client' && page === 'Carrito' && <>
@@ -183,7 +359,10 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
       {role === 'business' && page === 'Productos' && <><Intro title="Tu menú, siempre listo." subtitle="Agrega productos con foto, descripción y precio." />{uid && <BusinessProducts negocioId={uid} items={products} onChange={setProducts} loadError={productsError} lowStock={lowLimit} />}</>}
 
       {role === 'business' && page === 'Mi negocio' && <><Intro title="Un local con identidad." subtitle="Así te encontrarán tus clientes." />{myNegocio ? <><div className="orders"><section className="panel"><span className="badge green">{open ? 'Abierto' : 'Pausado'}</span><h2 style={{ marginTop: 16 }}>{myNegocio.nombre}</h2><p className="muted" style={{ margin: '10px 0' }}>{myNegocio.categoria}{myNegocio.descripcion ? ` · ${myNegocio.descripcion}` : ''}</p><div className="time"><Bike aria-hidden="true" />Entrega a domicilio y recogida</div><Button secondary onClick={toggleOpen}>{open ? 'Pausar nuevos pedidos' : 'Abrir negocio'}</Button></section><section className="panel"><h2>Vista del cliente</h2><p className="muted" style={{ margin: '12px 0 20px' }}>Comprueba la presentación de tu menú.</p><Button onClick={() => setPage('Escaparate')}>Ver escaparate</Button></section></div><BusinessProfile uid={uid} negocio={myNegocio} /></> : <section className="panel"><p className="muted">Cargando tu negocio…</p></section>}</>}
-      </main></div>
-    </div>{toCancel && <div className="modal-bg" onClick={() => setToCancel(null)}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="cancel-title" onClick={e => e.stopPropagation()} onKeyDown={e => e.key === 'Escape' && setToCancel(null)}><h2 id="cancel-title">¿Cancelar este pedido?</h2><p className="muted">El cliente verá que el pedido fue cancelado.{toCancel.estado >= 1 ? ' Las existencias descontadas se devolverán al inventario.' : ''}</p><div className="modal-actions"><button type="button" className="secondary" autoFocus onClick={() => setToCancel(null)}>No, conservar</button><button type="button" className="danger" onClick={confirmCancel}>Sí, cancelar pedido</button></div></div></div>}<p className="foot">KliparkLob · Tu tienda, más cerca de ti</p>
+      </main>
+      </div>
+    </div>
+    {toCancel && <div className="modal-bg" onClick={() => setToCancel(null)}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="cancel-title" onClick={e => e.stopPropagation()} onKeyDown={e => e.key === 'Escape' && setToCancel(null)}><h2 id="cancel-title">¿Cancelar este pedido?</h2><p className="muted">El cliente verá que el pedido fue cancelado.{toCancel.estado >= 1 ? ' Las existencias descontadas se devolverán al inventario.' : ''}</p><div className="modal-actions"><button type="button" className="secondary" autoFocus onClick={() => setToCancel(null)}>No, conservar</button><button type="button" className="danger" onClick={confirmCancel}>Sí, cancelar pedido</button></div></div></div>}
+    <p className="foot">KliparkLob · Tu tienda, más cerca de ti</p>
   </div>;
 }

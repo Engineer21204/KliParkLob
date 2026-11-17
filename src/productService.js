@@ -4,7 +4,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 
-const col = collection(db, "productos");
+const col = collection(db, "products");
 const MAX_CHARS = 600000; // tope de la imagen ya comprimida (Firestore limita cada documento a 1 MB)
 
 /** Productos de un negocio. */
@@ -37,10 +37,10 @@ export async function createProduct(negocioId, data) {
 export async function updateProduct(id, patch) {
   const data = { ...patch };
   if ("imagen" in data && !data.imagen) data.imagen = deleteField(); // quitar la foto
-  await updateDoc(doc(db, "productos", id), data);
+  await updateDoc(doc(db, "products", id), data);
 }
 
-export const removeProduct = (id) => deleteDoc(doc(db, "productos", id));
+export const removeProduct = (id) => deleteDoc(doc(db, "products", id));
 
 /** Reduce la foto (máx. 800 px, JPEG) y la devuelve como texto para guardarla en Firestore. */
 export function compressImage(file, max = 800, quality = 0.72) {
