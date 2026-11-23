@@ -1,4 +1,4 @@
-import { collection, doc, onSnapshot, addDoc, updateDoc, setDoc, getDoc, query, where, serverTimestamp, writeBatch } from "firebase/firestore";
+import { collection, doc, onSnapshot, addDoc, updateDoc, setDoc, getDoc, query, where, serverTimestamp, writeBatch, Timestamp } from "firebase/firestore";
 import { db } from "./firebase";
 
 /* ---------- Negocios (perfil público) ---------- */
@@ -32,7 +32,7 @@ export function watchOrders(field, uid, onData, onError) {
   return onSnapshot(query(collection(db, "pedidos"), where(field, "==", uid)), (snap) =>
     onData(snap.docs.map((d) => {
       const data = d.data({ serverTimestamps: "estimate" });
-      return { id: d.id, ...data, creado: data.creadoEn?.toMillis?.() ?? Date.now() };
+      return { id: d.id, ...data, creado: data.creadoEn?.toMillis?.() ?? Date.now(), listoMs: data.listoEn?.toMillis?.() ?? null };
     }).sort((a, b) => b.creado - a.creado)), onError);
 }
 
@@ -48,7 +48,7 @@ export const stockAfter = (products, items) => products.map((p) => {
 });
 
 /** Cancela el pedido; si ya se había aceptado, devuelve las existencias al inventario. */
-export async function cancelOrder(order, products) {
+export async function cancelOrder(order, products, motivo = "", por = "negocio") {
   let updated = products;
   const batch = writeBatch(db);
   if (order.estado >= 1) {
@@ -60,22 +60,75 @@ export async function cancelOrder(order, products) {
       if (p.stock !== products[i].stock) batch.update(doc(db, "products", p.id), { stock: p.stock });
     });
   }
-  batch.update(doc(db, "pedidos", order.id), { estado: 4 });
+  batch.update(doc(db, "pedidos", order.id), { estado: 4, cancelPor: por, motivo }); // el pedido NO se borra: queda con su motivo
   await batch.commit();
   return updated;
 }
 
 /** Acepta el pedido y descuenta las existencias en una sola operación. Devuelve el catálogo actualizado. */
-export async function acceptOrder(order, products) {
+export async function acceptOrder(order, products, opts = {}) {
   const updated = stockAfter(products, order.items);
   const batch = writeBatch(db);
   updated.forEach((p, i) => {
     if (p.stock !== products[i].stock) batch.update(doc(db, "products", p.id), { stock: p.stock });
   });
-  batch.update(doc(db, "pedidos", order.id), { estado: 1 });
+  const prepMin = Math.max(1, Math.round(Number(opts.prepMin) || 15));
+  batch.update(doc(db, "pedidos", order.id), {
+    estado: 1,
+    prepMin,
+    listoEn: Timestamp.fromMillis(Date.now() + prepMin * 60000), // hora estimada de término
+    retrasoMin: 0,
+    porFinalizar: false,
+    aceptadoEn: serverTimestamp(),
+  });
   await batch.commit();
   return updated;
 }
+
+/* ---------- Tiempos de preparación y validaciones automáticas ---------- */
+
+export const DELIVERY_EXTRA_MIN = 15; // minutos extra si es a domicilio
+
+/** Tiempo estimado: el producto más lento + 2 min por cada unidad extra (+ envío). */
+export function calcPrepMin(items, products, negocio, recoger = false) {
+  const base = Number(negocio?.prepBaseMin) > 0 ? Number(negocio.prepBaseMin) : 15;
+  let max = 0, units = 0;
+  (items || []).forEach((i) => {
+    const p = (products || []).find((x) => x.id === i.id);
+    max = Math.max(max, Number(p?.prepMin) > 0 ? Number(p.prepMin) : base);
+    units += i.quantity || 0;
+  });
+  const total = (max || base) + Math.max(0, units - 1) * 2 + (recoger ? 0 : DELIVERY_EXTRA_MIN);
+  return Math.min(180, Math.round(total));
+}
+
+/** ¿Se puede aceptar solo? Revisa negocio abierto, producto disponible y existencias. */
+export function checkOrder(order, products, negocio) {
+  const st = getBusinessStatus(negocio?.horario, negocio?.abierto !== false);
+  const abierto = st.estado === "sin-horario" ? negocio?.abierto !== false : st.abierto;
+  if (!abierto) return { ok: false, tipo: "cerrado", motivo: "El negocio está cerrado en este momento." };
+  for (const item of order.items || []) {
+    const p = (products || []).find((x) => x.id === item.id);
+    if (!p) return { ok: false, tipo: "producto", motivo: `“${item.name}” ya no está en el menú.` };
+    if (p.available === false) return { ok: false, tipo: "producto", motivo: `“${item.name}” no está disponible.` };
+    if (typeof p.stock === "number" && p.stock < item.quantity) return { ok: false, tipo: "stock", motivo: `No hay existencias suficientes de “${item.name}”.` };
+  }
+  return { ok: true };
+}
+
+/** Retraso: suma minutos a la hora estimada de término. */
+export const extendOrder = (order, extraMin) =>
+  updateDoc(doc(db, "pedidos", order.id), {
+    listoEn: Timestamp.fromMillis((order.listoMs || Date.now()) + extraMin * 60000),
+    retrasoMin: (order.retrasoMin || 0) + extraMin,
+    porFinalizar: false,
+  });
+
+/** Marca que el tiempo ya se cumplió (aviso al negocio: "programado para finalizar"). */
+export const markFinishing = (id) => updateDoc(doc(db, "pedidos", id), { porFinalizar: true });
+
+/** "Confirmar pedido listo": estado definitivo 2. */
+export const finishOrder = (id) => updateDoc(doc(db, "pedidos", id), { estado: 2, listoReal: serverTimestamp() });
 
 export function friendlyMarketError(e) {
   switch (e?.code) {
@@ -266,4 +319,3 @@ export function getBusinessStatus(horario, manualAbierto = true, fecha = new Dat
     abierto: false
   };
 }
-

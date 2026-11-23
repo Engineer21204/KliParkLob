@@ -55,43 +55,40 @@ export function CategoryBar({ category, onCategory, onlyOpen = false, onToggleOp
 /* ---------- Tarjeta de local ---------- */
 export function StoreCard({ store, onOpen, highlight = false }) {
   const Icon = store.Icon || Store;
+  const glass = 'backdrop-blur-md border border-white/30';
   return (
     <article
       onClick={() => onOpen(store.id)}
       onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onOpen(store.id)}
       tabIndex={0}
       role="button"
-      className="group cursor-pointer bg-white rounded-[24px] border border-gray-200 overflow-hidden shadow-[0_4px_20px_-2px_rgba(20,20,22,0.06)] hover:shadow-[0_18px_38px_-8px_rgba(20,20,22,0.16)] hover:-translate-y-1 transition-all duration-300 flex flex-col focus-visible:outline-2 focus-visible:outline-brand-coral"
+      className="group relative h-[340px] cursor-pointer overflow-hidden rounded-[28px] bg-gradient-to-br from-brand-coral to-orange-400 shadow-[0_10px_30px_-8px_rgba(20,20,22,0.25)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_48px_-10px_rgba(20,20,22,0.4)] focus-visible:outline-2 focus-visible:outline-brand-coral"
     >
-      <div className="relative h-48 overflow-hidden bg-gradient-to-br from-brand-coral to-orange-400">
-        {store.image
-          ? <img src={store.image} alt="" loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
-          : <div className="w-full h-full grid place-items-center text-white/90"><Icon aria-hidden="true" className="w-14 h-14" /></div>}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-black/10" />
-        <span className={`absolute top-3.5 left-3.5 px-3 py-1 rounded-full text-[11px] font-extrabold shadow-sm ${
-          store.open ? 'bg-brand-mint text-white' : 'bg-white/95 text-brand-charcoal'
-        }`}>
-          {store.open ? 'Abierto' : 'Cerrado temporalmente'}
-        </span>
-        {highlight && (
-          <span className="absolute top-3.5 right-3.5 bg-brand-charcoal/85 text-white px-2.5 py-1 rounded-xl text-xs font-bold">★ Favorito</span>
-        )}
-        {store.time && (
-          <span className="absolute bottom-3.5 left-3.5 bg-white/95 text-brand-charcoal px-3 py-1 rounded-xl text-xs font-extrabold shadow-sm">
-            {store.time}
-          </span>
-        )}
-      </div>
+      {/* Foto a toda la tarjeta */}
+      {store.image
+        ? <img src={store.image} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-110" />
+        : <div className="absolute inset-0 grid place-items-center text-white/90"><Icon aria-hidden="true" className="h-16 w-16" /></div>}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/25" />
 
-      <div className="p-5 flex-1 flex flex-col justify-between">
-        <div>
-          <h3 className="font-display font-extrabold text-lg text-brand-charcoal group-hover:text-brand-coral transition truncate">{store.name}</h3>
-          <p className="text-xs text-gray-500 line-clamp-2 mt-1 leading-relaxed">{store.description}</p>
+      {/* Etiquetas de cristal */}
+      <span className={`absolute left-3.5 top-3.5 rounded-full px-3 py-1 text-[11px] font-extrabold text-white ${glass} ${store.open ? 'bg-emerald-500/60' : 'bg-black/40'}`}>
+        {store.open ? '● Abierto' : 'Cerrado temporalmente'}
+      </span>
+      {highlight && (
+        <span className={`absolute right-3.5 top-3.5 rounded-full bg-black/35 px-3 py-1 text-xs font-bold text-white ${glass}`}>★ Favorito</span>
+      )}
+
+      {/* Panel de cristal: ocupa casi todo el ancho */}
+      <div className={`absolute inset-x-2.5 bottom-2.5 rounded-[22px] bg-white/20 p-4 text-white shadow-[0_8px_32px_rgba(0,0,0,0.25)] backdrop-blur-xl ${'border border-white/40'}`}>
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="min-w-0 truncate font-display text-xl font-extrabold drop-shadow">{store.name}</h3>
+          {store.time && <span className="shrink-0 rounded-lg bg-white/25 px-2.5 py-1 text-[11px] font-extrabold">{store.time}</span>}
         </div>
-        <div className="mt-4 pt-3.5 border-t border-gray-100 flex items-center justify-between text-xs font-semibold">
-          <span className="text-gray-500 bg-gray-100 px-2.5 py-1 rounded-lg">{store.categoryLabel}</span>
-          <span className="text-gray-600 inline-flex items-center gap-1.5">
-            <Bike aria-hidden="true" className="w-3.5 h-3.5" />Envío {money(store.deliveryFee)}
+        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-white/85">{store.description}</p>
+        <div className="mt-3 flex items-center justify-between border-t border-white/25 pt-3 text-xs font-semibold">
+          <span className="rounded-lg bg-white/25 px-2.5 py-1">{store.categoryLabel}</span>
+          <span className="inline-flex items-center gap-1.5 text-white/95">
+            <Bike aria-hidden="true" className="h-3.5 w-3.5" />Envío {money(store.deliveryFee)}
           </span>
         </div>
       </div>
@@ -195,7 +192,7 @@ export function MarketHome({ stores: allStores, loading, greeting, address, quer
             <h2 className="font-display font-extrabold text-2xl tracking-tight text-brand-charcoal">Favoritos del Barrio</h2>
             <span className="px-2.5 py-0.5 rounded-full bg-brand-coralLight text-brand-coral text-xs font-extrabold">Top locales</span>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
             {featured.map(s => <StoreCard key={s.id} store={s} onOpen={onOpen} highlight />)}
           </div>
         </section>
@@ -220,7 +217,7 @@ export function MarketHome({ stores: allStores, loading, greeting, address, quer
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
             {stores.map(s => <StoreCard key={s.id} store={s} onOpen={onOpen} />)}
           </div>
         )}
@@ -233,8 +230,9 @@ export function MarketHome({ stores: allStores, loading, greeting, address, quer
 /* ---------- Barra superior estilo MesaLocal ---------- */
 export function TopBar({ address, query, onQuery, onHome, onAddress, onOrders, onProfile, onCart, onLogout, activeOrders = 0, cartCount = 0, initials = 'CL', name = '', guest = false }) {
   return (
-    <header className="mv-root sticky top-0 z-40 bg-white/90 backdrop-blur-xl border-b border-gray-200 shadow-[0_4px_24px_-4px_rgba(20,20,22,0.05)]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
+    <header className="mv-root sticky top-0 z-40 px-3 pt-3 sm:px-4">
+      <div className="mx-auto w-full max-w-[1800px] rounded-[28px] border border-white/70 bg-orange-100/80 shadow-[0_8px_32px_rgba(20,20,22,0.12),inset_0_1px_0_rgba(255,255,255,0.8)] backdrop-blur-2xl backdrop-saturate-150">
+      <div className="h-20 px-4 sm:px-6 flex items-center justify-between gap-4">
         <div className="flex items-center gap-6 shrink-0">
           <button type="button" onClick={onHome} className="flex items-center gap-2.5 group text-left">
             <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-brand-coral to-orange-500 text-white flex items-center justify-center shadow-md group-hover:rotate-3 transition">
@@ -246,9 +244,9 @@ export function TopBar({ address, query, onQuery, onHome, onAddress, onOrders, o
             </span>
           </button>
 
-          <div className="hidden md:block h-7 w-px bg-gray-200" />
+          <div className="hidden md:block h-7 w-px bg-gray-300/60" />
 
-          <button type="button" onClick={onAddress} className="hidden md:flex items-center gap-3 px-3.5 py-2 rounded-2xl bg-gray-100 hover:bg-gray-200/70 transition text-left max-w-[260px]">
+          <button type="button" onClick={onAddress} className="hidden md:flex items-center gap-3 px-3.5 py-2 rounded-2xl bg-white/50 hover:bg-white/80 border border-white/70 backdrop-blur transition text-left max-w-[260px]">
             <span className="w-8 h-8 rounded-xl bg-white text-brand-coral flex items-center justify-center shadow-sm shrink-0">
               <MapPin aria-hidden="true" className="w-4 h-4" />
             </span>
@@ -267,14 +265,14 @@ export function TopBar({ address, query, onQuery, onHome, onAddress, onOrders, o
               value={query}
               onChange={e => onQuery(e.target.value)}
               placeholder="Buscar restaurantes, cafés o postres..."
-              className="w-full bg-gray-100 hover:bg-gray-100 focus:bg-white text-sm font-medium pl-11 pr-4 py-3 rounded-2xl border border-transparent focus:border-brand-coral/40 focus:ring-4 focus:ring-brand-coral/10 focus:outline-none transition placeholder:text-gray-400"
+              className="w-full bg-white/50 hover:bg-white/70 focus:bg-white border-white/70 backdrop-blur text-sm font-medium pl-11 pr-4 py-3 rounded-2xl border border-transparent focus:border-brand-coral/40 focus:ring-4 focus:ring-brand-coral/10 focus:outline-none transition placeholder:text-gray-400"
             />
           </label>
         </div>
 
         <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
           {!guest && (
-            <button type="button" onClick={onOrders} className="hidden lg:flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-brand-mintLight hover:bg-emerald-100 text-emerald-800 text-xs font-bold transition border border-emerald-200">
+            <button type="button" onClick={onOrders} className="hidden lg:flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-emerald-100/60 hover:bg-emerald-100/90 text-emerald-800 text-xs font-bold transition border border-emerald-200/70 backdrop-blur">
               {activeOrders > 0 && <span className="w-2 h-2 rounded-full bg-brand-mint animate-ping" />}
               <Package aria-hidden="true" className="w-4 h-4" />
               <span>{activeOrders > 0 ? `${activeOrders} pedido${activeOrders > 1 ? 's' : ''} en curso` : 'Mis pedidos'}</span>
@@ -282,7 +280,7 @@ export function TopBar({ address, query, onQuery, onHome, onAddress, onOrders, o
           )}
 
           {!guest && (
-            <button type="button" onClick={onProfile} aria-label="Mi perfil" className="flex items-center gap-2 px-3 py-2 rounded-2xl hover:bg-gray-100 transition border border-gray-200 bg-white">
+            <button type="button" onClick={onProfile} aria-label="Mi perfil" className="flex items-center gap-2 px-3 py-2 rounded-2xl hover:bg-white/80 transition border border-white/70 bg-white/50 backdrop-blur">
               <span className="w-8 h-8 rounded-xl bg-brand-charcoal text-white font-display font-bold text-xs flex items-center justify-center">{initials}</span>
               <span className="hidden xl:inline text-xs font-bold text-brand-charcoal max-w-[90px] truncate">{name}</span>
             </button>
@@ -303,8 +301,9 @@ export function TopBar({ address, query, onQuery, onHome, onAddress, onOrders, o
       <div className="sm:hidden px-4 pb-3">
         <label className="relative block">
           <Search aria-hidden="true" className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input aria-label="Buscar negocios" value={query} onChange={e => onQuery(e.target.value)} placeholder="Buscar locales..." className="w-full bg-gray-100 text-xs font-medium pl-10 pr-4 py-2.5 rounded-xl focus:bg-white focus:outline-none border border-gray-200" />
+          <input aria-label="Buscar negocios" value={query} onChange={e => onQuery(e.target.value)} placeholder="Buscar locales..." className="w-full bg-white/50 text-xs font-medium pl-10 pr-4 py-2.5 rounded-xl focus:bg-white focus:outline-none border border-gray-200" />
         </label>
+      </div>
       </div>
     </header>
   );

@@ -5,7 +5,7 @@ import { createProduct, updateProduct, removeProduct, compressImage, friendlyPro
 const CATEGORIAS = ["Comida", "Bebidas", "Postres"];
 const money = (n) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
 const LOW_STOCK = 5; // aviso de pocas unidades
-const EMPTY = { name: "", price: "", description: "", categoria: "", imagen: "", stock: "" };
+const EMPTY = { name: "", price: "", description: "", categoria: "", imagen: "", stock: "", prepMin: "" };
 const stockLabel = (p, limit = LOW_STOCK) => typeof p.stock !== "number" ? "Sin control de existencias" : p.stock === 0 ? "Agotado" : p.stock <= limit ? `⚠ Pocas unidades: ${p.stock}` : `Existencias: ${p.stock}`;
 
 /** Catálogo del negocio: lista, alta, edición y borrado de productos (con foto y descripción). */
@@ -49,7 +49,7 @@ export default function BusinessProducts({ negocioId, items, onChange, loadError
     setBusy(true);
     try {
       if (editing) {
-        const patch = { name: form.name.trim(), price, description: form.description.trim(), categoria: form.categoria, imagen: form.imagen, stock, opciones: cleanOptions(opciones) };
+        const patch = { name: form.name.trim(), price, description: form.description.trim(), categoria: form.categoria, imagen: form.imagen, stock, opciones: cleanOptions(opciones), prepMin: Number(form.prepMin) > 0 ? Math.round(Number(form.prepMin)) : null };
         await updateProduct(editing, patch);
         onChange(items.map((p) => (p.id === editing ? { ...p, ...patch } : p)));
         setMsg("Producto actualizado.");
@@ -68,7 +68,7 @@ export default function BusinessProducts({ negocioId, items, onChange, loadError
 
   function startEdit(p) {
     setEditing(p.id);
-    setForm({ name: p.name, price: String(p.price), description: p.description || "", categoria: p.categoria || "", imagen: p.imagen || "", stock: String(p.stock ?? "") });
+    setForm({ name: p.name, price: String(p.price), description: p.description || "", categoria: p.categoria || "", imagen: p.imagen || "", stock: String(p.stock ?? ""), prepMin: String(p.prepMin ?? "") });
     setOpciones(p.opciones || []);
     setFileKey((k) => k + 1);
     setMsg("");
@@ -117,7 +117,7 @@ export default function BusinessProducts({ negocioId, items, onChange, loadError
             <div className="product-art">{p.imagen ? <img src={p.imagen} alt="" /> : <span aria-hidden="true">🛍️</span>}</div>
             <div className="product-info">
               <h3>{p.name}</h3>
-              <p className="muted">{money(p.price)}{p.categoria ? ` · ${p.categoria}` : ""}</p>
+              <p className="muted">{money(p.price)}{p.categoria ? ` · ${p.categoria}` : ""}{p.prepMin ? ` · ${p.prepMin} min` : ""}</p>
               {p.description && <p className="muted">{p.description}</p>}
               {p.opciones?.length > 0 && <p className="muted">Personalizable: {p.opciones.map((g) => g.titulo).join(", ")}</p>}
               <p className="muted"><strong>{stockLabel(p, lowStock)}</strong>{" "}
@@ -147,6 +147,9 @@ export default function BusinessProducts({ negocioId, items, onChange, loadError
         </label>
         <label className="field">Existencias (unidades disponibles)
           <input required type="number" min="0" step="1" value={form.stock} onChange={set("stock")} placeholder="20" />
+        </label>
+        <label className="field">Tiempo de preparación en minutos (opcional)
+          <input type="number" min="1" max="180" step="1" value={form.prepMin} onChange={set("prepMin")} placeholder="10" />
         </label>
         <label className="field">Categoría
           <select value={form.categoria} onChange={set("categoria")}>

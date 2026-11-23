@@ -18,7 +18,7 @@ export async function listProducts(negocioId) {
     .sort((a, b) => a.name.localeCompare(b.name, "es"));
 }
 
-const clean = ({ name, price, description, categoria, imagen, available, stock, opciones }) => ({
+const clean = ({ name, price, description, categoria, imagen, available, stock, opciones, prepMin }) => ({
   name: name.trim(),
   price: Number(price),
   description: description.trim(),
@@ -26,6 +26,7 @@ const clean = ({ name, price, description, categoria, imagen, available, stock, 
   stock: Math.max(0, Math.floor(Number(stock) || 0)), // existencias (unidades)
   available: available ?? true,
   ...(imagen ? { imagen } : {}),
+  ...(Number(prepMin) > 0 ? { prepMin: Math.round(Number(prepMin)) } : {}), // minutos de preparación
   ...(opciones?.length ? { opciones } : {}), // grupos de opciones (tamaño, extras, quitar ingredientes…)
 });
 
@@ -39,6 +40,7 @@ export async function updateProduct(id, patch) {
   const data = { ...patch };
   if ("imagen" in data && !data.imagen) data.imagen = deleteField(); // quitar la foto
   if ("opciones" in data && !data.opciones?.length) data.opciones = deleteField(); // quitar las opciones
+  if ("prepMin" in data && !(Number(data.prepMin) > 0)) data.prepMin = deleteField();
   await updateDoc(doc(db, "products", id), data);
 }
 

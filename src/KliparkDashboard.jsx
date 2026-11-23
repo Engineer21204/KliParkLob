@@ -4,9 +4,9 @@ import { MarketHome, TopBar, StoreModal, CartDrawer } from './MarketView';
 import BusinessProducts from './BusinessProducts';
 import BusinessProfile from './BusinessProfile';
 import ClientProfile from './ClientProfile';
-import ProductOptionEditor from './ProductOptionEditor';
 import { listProducts, friendlyProductError } from './productService';
-import { watchNegocios, watchNegocio, updateNegocio, watchOrders, createOrder, advanceOrder, acceptOrder, cancelOrder, friendlyMarketError } from './marketService';
+import { watchNegocios, watchNegocio, updateNegocio, watchOrders, createOrder, advanceOrder, acceptOrder, cancelOrder, friendlyMarketError, calcPrepMin, checkOrder, extendOrder, markFinishing, finishOrder } from './marketService';
+import OrdersBoard, { useNow, fmtLeft, fmtHour } from './OrdersBoard';
 
 const DELIVERY_FEE = 20; // Envío fijo por ahora
 const FREE_SHIPPING_FROM = 250; // Envío gratis desde este subtotal (pon 0 para desactivar)
@@ -90,16 +90,22 @@ function StoreHero({ store, products, onBack, canOrder }) {
   );
 }
 
-function OrderCard({ order, business = false, onAdvance, onCancel }) {
+function OrderCard({ order, business = false, auto = false, onAdvance, onCancel }) {
+  const now = useNow();
+  const left = order.listoMs ? order.listoMs - now : null;
   return <section className="panel">
     <div className="row"><h2>Pedido #{order.id.slice(0, 6).toUpperCase()}</h2><span className="badge">{statusLabels[order.estado]}</span></div>
     <p className="muted" style={{ marginTop: 8 }}>{business ? `Cliente: ${order.clienteNombre}` : order.negocioNombre} · {order.recoger ? 'Recoger en local' : 'Entrega a domicilio'}</p>
+    {!business && order.estado === 0 && order.prepMinEst > 0 && <p className="notice" style={{ marginTop: 10 }}>Tiempo estimado: ~{order.prepMinEst} min desde que el negocio acepte.</p>}
+    {!business && order.estado === 1 && order.listoMs && <p className="notice" style={{ marginTop: 10 }}>{left > 0 ? <>Tu pedido estará listo en aprox. <strong>{Math.ceil(left / 60000)} min</strong> (≈ {fmtHour(order.listoMs)}){order.retrasoMin > 0 ? ' · el negocio informó un pequeño retraso' : ''}</> : 'Ya casi: el negocio está terminando tu pedido.'}</p>}
+    {!business && order.estado === 2 && <p className="notice" style={{ marginTop: 10 }}>🎉 ¡Tu pedido está listo! {order.recoger ? 'Pasa a recogerlo.' : 'Va en camino.'}</p>}
+    {order.estado === 4 && order.motivo && <p className="muted" style={{ marginTop: 8 }}>Motivo: {order.motivo}</p>}
     {business && !order.recoger && order.direccion && <p className="muted">Entregar en: {order.direccion}</p>}
     {business && order.clienteCel && <p className="muted">Teléfono del cliente: {order.clienteCel}</p>}
     {order.items.map((item, i) => <div className="order row" key={(item.key || item.id) + i}><span>{item.quantity} × {item.name}{item.detalle?.length > 0 && <small style={{ display: 'block', opacity: .75 }}>{item.detalle.join(' · ')}</small>}{item.nota && <small style={{ display: 'block', opacity: .75, fontStyle: 'italic' }}>“{item.nota}”</small>}</span><strong>{money(item.price * item.quantity)}</strong></div>)}
     <div className="total row"><strong>Total</strong><h2>{money(order.total)}</h2></div>
     {business
-      ? order.estado < 3 && <><Button onClick={() => onAdvance(order)}>{['Aceptar y preparar', 'Marcar como listo', 'Confirmar entrega'][order.estado]}</Button>{' '}<Button secondary onClick={() => onCancel(order)}>Cancelar pedido</Button></>
+      ? order.estado < 3 && <>{order.estado === 0 && auto ? <p className="notice" style={{ marginBottom: 12 }}>Aceptando pedido automáticamente…</p> : <><Button onClick={() => onAdvance(order)}>{['Aceptar y preparar', 'Marcar como listo', 'Confirmar entrega'][order.estado]}</Button>{' '}</>}<Button secondary onClick={() => onCancel(order)}>Cancelar pedido</Button></>
       : order.estado === 4 ? <p className="notice">El negocio canceló este pedido.</p> : <ol className="timeline">{['Pedido recibido', 'Confirmación del negocio', 'Preparación finalizada', order.recoger ? 'Recogido en local' : 'Entregado'].map((label, i) => <li key={label} className={i <= order.estado ? 'done' : ''}>{label}</li>)}</ol>}
   </section>;
 }
@@ -130,6 +136,18 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
   const [toCancel, setToCancel] = useState(null); // pedido pendiente de confirmar cancelación
   const fail = e => setNotice(friendlyMarketError(e));
 
+  // Pedidos automáticos: el negocio los activa o desactiva (negocios/{uid}.autoPedidos)
+  const [autoFailed, setAutoFailed] = useState([]);   // pedidos que no se pudieron aceptar solos
+  const [autoTick, setAutoTick] = useState(0);
+  const autoBusy = useRef(false);
+  const autoTried = useRef(new Set());
+  const autoAccept = myNegocio ? myNegocio.autoPedidos !== false : false;
+  const toggleAuto = on => updateNegocio(uid, { autoPedidos: on }).catch(fail);
+  const saveBase = min => {
+    if (!(min >= 1 && min <= 180)) { setNotice('El tiempo base debe estar entre 1 y 180 minutos.'); return; }
+    updateNegocio(uid, { prepBaseMin: Math.round(min) }).then(() => setNotice('Tiempo base guardado.')).catch(fail);
+  };
+
   useEffect(() => {
     if (role === 'client') return watchNegocios(list => setNegocios(list.map(decorate)), e => { setNegocios([]); fail(e); });
   }, [role]);
@@ -139,6 +157,51 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
     listProducts(uid).then(setProducts).catch(e => { setProducts([]); setProductsError(friendlyProductError(e)); });
     return () => stops.forEach(stop => stop());
   }, [role, uid]);
+  const prevEstados = useRef({});
+  useEffect(() => {
+    if (role !== 'client') return;
+    orders.forEach(o => {
+      const before = prevEstados.current[o.id];
+      if (before !== undefined && before !== o.estado) {
+        if (o.estado === 2) {
+          const msg = `Tu pedido de ${o.negocioNombre} está listo ${o.recoger ? 'para recoger' : 'y va en camino'}.`;
+          setNotice(`🎉 ${msg}`);
+          try { if (window.Notification?.permission === 'granted') new Notification('¡Pedido listo!', { body: msg }); } catch { /* sin permiso */ }
+        } else if (o.estado === 1) setNotice(`${o.negocioNombre} aceptó tu pedido y ya lo está preparando.`);
+        else if (o.estado === 4) setNotice(`Tu pedido fue cancelado${o.motivo ? `: ${o.motivo}` : '.'}`);
+      }
+      prevEstados.current[o.id] = o.estado;
+    });
+  }, [orders, role]);
+  useEffect(() => {
+    if (role !== 'business' || !autoAccept || products === null || !myNegocio || autoBusy.current) return;
+    const next = orders.find(o => o.estado === 0 && !autoTried.current.has(o.id));
+    if (!next) return;
+    autoBusy.current = true;
+    autoTried.current.add(next.id);
+    (async () => {
+      try {
+        const check = checkOrder(next, products, myNegocio);
+        if (check.ok) {
+          const prepMin = calcPrepMin(next.items, products, myNegocio, next.recoger);
+          setProducts(await acceptOrder(next, products, { prepMin })); // valida, descuenta existencias y pasa a "En preparación"
+          setNotice(`Pedido #${next.id.slice(0, 6).toUpperCase()} aceptado automáticamente (${prepMin} min).`);
+        } else if (check.tipo === 'cerrado') {
+          setAutoFailed(list => [...list, next.id]); // queda pendiente para decisión del negocio
+          setNotice(`Pedido #${next.id.slice(0, 6).toUpperCase()} recibido con el negocio cerrado. Decide si lo aceptas.`);
+        } else {
+          setProducts(await cancelOrder(next, products, check.motivo, 'sistema')); // se conserva con su motivo
+          setNotice(`Pedido #${next.id.slice(0, 6).toUpperCase()} cancelado: ${check.motivo}`);
+        }
+      } catch (e) {
+        setAutoFailed(list => [...list, next.id]);
+        fail(e);
+      } finally {
+        autoBusy.current = false;
+        setAutoTick(t => t + 1);
+      }
+    })();
+  }, [role, orders, products, myNegocio, autoAccept, autoTick]);
   useEffect(() => {
     if (role === 'client' && !guest && uid) return watchOrders('clienteId', uid, setOrders, fail);
   }, [role, guest, uid]);
@@ -210,13 +273,16 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
     if (!pickup && !me.direccion) { setNotice('Agrega tu dirección de entrega en Mi perfil, o elige Recoger.'); setCartOpen(false); setPage('Mi perfil'); return; }
     setSending(true);
     try {
-      await createOrder({ negocioId: cart.storeId, negocioNombre: cart.storeName, clienteId: uid, clienteNombre: me.nombre || 'Cliente', clienteCel: me.cel || '', direccion: pickup ? '' : me.direccion, items: cart.items, subtotal, envio: fee, total, recoger: pickup });
+      await createOrder({ negocioId: cart.storeId, negocioNombre: cart.storeName, clienteId: uid, clienteNombre: me.nombre || 'Cliente', clienteCel: me.cel || '', direccion: pickup ? '' : me.direccion, items: cart.items, subtotal, envio: fee, total, recoger: pickup, prepMinEst: calcPrepMin(cart.items, storeProducts || [], store, pickup) });
       setCart(null); setCartOpen(false); setPage('Mi pedido'); setNotice('¡Pedido enviado! El negocio lo verá de inmediato.');
     } catch (e) { fail(e); } finally { setSending(false); }
   }
   const advance = async order => {
     try {
-      if (order.estado === 0 && products) setProducts(await acceptOrder(order, products)); // acepta y descuenta existencias
+      if (order.estado === 0 && products) {
+        const prepMin = calcPrepMin(order.items, products, myNegocio, order.recoger);
+        setProducts(await acceptOrder(order, products, { prepMin })); // acepta y descuenta existencias
+      } else if (order.estado === 1) await finishOrder(order.id);
       else await advanceOrder(order.id, order.estado + 1);
     } catch (e) { fail(e); }
   };
@@ -224,7 +290,7 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
     const order = toCancel;
     setToCancel(null);
     try {
-      const list = await cancelOrder(order, products || []);
+      const list = await cancelOrder(order, products || [], 'Cancelado por el negocio', 'negocio');
       if (products) setProducts(list);
       setNotice(order.estado >= 1 ? 'Pedido cancelado. Las existencias se devolvieron al inventario.' : 'Pedido cancelado.');
     } catch (e) { fail(e); }
@@ -306,8 +372,8 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
   if (role === 'client' && page === 'Explorar') {
     return <>
       {topBar}
-      <div className="mv-root min-h-screen bg-brand-surface text-brand-charcoal">
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-16">
+      <div className="mv-root min-h-screen bg-gradient-to-br from-orange-50 via-brand-surface to-emerald-50 bg-fixed text-brand-charcoal">
+        <main className="w-full max-w-[1800px] mx-auto px-3 sm:px-4 pt-8 pb-16">
           {guest && (
             <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-brand-coralLight px-5 py-3 text-sm font-semibold text-brand-coral">
               <span>Estás explorando como invitado.</span>
@@ -435,7 +501,22 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
         <div className="orders"><section className="panel"><h2>Pedidos activos</h2><p className="muted" style={{ margin: '12px 0 20px' }}>{orders.length ? 'Consulta el estado y confirma los pedidos.' : 'Aún no hay pedidos. Los nuevos pedidos de tus clientes aparecerán aquí.'}</p><Button onClick={() => setPage('Pedidos')}>Gestionar pedidos</Button></section><section className="panel"><span className="badge green">OPERACIÓN DEL LOCAL</span><h2 style={{ marginTop: 16 }}>Tu catálogo al día</h2><p className="muted" style={{ margin: '10px 0 20px' }}>Mantén disponibles solo los productos que puedes preparar hoy.</p>{low.length > 0 && <p className="notice">⚠ Pocas existencias: {low.map(p => `${p.name} (${p.stock})`).join(', ')}</p>}<Button secondary onClick={() => setPage('Productos')}>Administrar productos</Button></section></div>
       </>}
 
-      {role === 'business' && page === 'Pedidos' && <><Intro title="Centro de pedidos" subtitle="Confirma, prepara y entrega sin perder el ritmo." /><div className="orders">{orders.map(order => <OrderCard key={order.id} order={order} business onAdvance={advance} onCancel={setToCancel} />)}</div>{!orders.length && <section className="panel"><h2>Sin pedidos por ahora</h2><p className="muted">Los pedidos de tu negocio aparecerán aquí.</p></section>}</>}
+      {role === 'business' && page === 'Pedidos' && <><Intro title="Centro de pedidos" subtitle="Cada pedido por estado, con su tiempo restante." />
+        <OrdersBoard
+          orders={orders}
+          autoPedidos={autoAccept}
+          prepBaseMin={myNegocio?.prepBaseMin}
+          autoFailed={autoFailed}
+          onToggleAuto={toggleAuto}
+          onSaveBase={saveBase}
+          onAccept={advance}
+          onExtend={(o, m) => extendOrder(o, m).then(() => setNotice(`Se agregaron ${m} minutos al pedido #${o.id.slice(0, 6).toUpperCase()}.`)).catch(fail)}
+          onFinishing={o => markFinishing(o.id).catch(() => {})}
+          onFinish={o => finishOrder(o.id).then(() => setNotice('Pedido confirmado como listo. El cliente ya puede verlo.')).catch(fail)}
+          onDeliver={advance}
+          onCancel={setToCancel}
+        />
+        {!orders.length && <section className="panel" style={{ marginTop: 16 }}><h2>Sin pedidos por ahora</h2><p className="muted">Los pedidos nuevos aparecerán aquí al instante.</p></section>}</>}
 
       {role === 'business' && page === 'Productos' && <><Intro title="Tu menú, siempre listo." subtitle="Agrega productos con foto, descripción y precio." />{uid && <BusinessProducts negocioId={uid} items={products} onChange={setProducts} loadError={productsError} lowStock={lowLimit} />}</>}
 
