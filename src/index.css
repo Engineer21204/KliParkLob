@@ -1,0 +1,31 @@
+@layer theme, base, legacy, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "./KliparkDashboard.css" layer(legacy);
+
+
+@theme {
+  --color-brand-coral: #FF5A36;
+  --color-brand-coralDark: #E04422;
+  --color-brand-coralLight: #FFF0EC;
+  --color-brand-charcoal: #141416;
+  --color-brand-surface: #FAFAFA;
+  --color-brand-mint: #10B981;
+  --color-brand-mintLight: #ECFDF5;
+  --font-display: 'Plus Jakarta Sans', sans-serif;
+}
+
+/* Reinicio de estilos SOLO para la vista del cliente (como el "preflight" de Tailwind) */
+@layer base {
+  .mv-root, .mv-root *, .mv-root ::before, .mv-root ::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0 solid #e5e7eb;
+  }
+  .mv-root { font-family: 'Inter', system-ui, sans-serif; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  .mv-root h1, .mv-root h2, .mv-root h3 { font-size: inherit; font-weight: inherit; }
+  .mv-root button, .mv-root input { font: inherit; color: inherit; background: transparent; }
+  .mv-root button { cursor: pointer; text-align: inherit; }
+  .mv-root img, .mv-root svg { display: block; max-width: 100%; }
+}

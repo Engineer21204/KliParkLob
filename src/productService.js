@@ -13,12 +13,12 @@ export async function listProducts(negocioId) {
   return snap.docs
     .map((d) => {
       const { creadoEn, ...data } = d.data();
-      return { id: d.id, ...data };
+      return { id: d.id, ...data }; // incluye `opciones` si el producto las tiene
     })
     .sort((a, b) => a.name.localeCompare(b.name, "es"));
 }
 
-const clean = ({ name, price, description, categoria, imagen, available, stock }) => ({
+const clean = ({ name, price, description, categoria, imagen, available, stock, opciones }) => ({
   name: name.trim(),
   price: Number(price),
   description: description.trim(),
@@ -26,6 +26,7 @@ const clean = ({ name, price, description, categoria, imagen, available, stock }
   stock: Math.max(0, Math.floor(Number(stock) || 0)), // existencias (unidades)
   available: available ?? true,
   ...(imagen ? { imagen } : {}),
+  ...(opciones?.length ? { opciones } : {}), // grupos de opciones (tamaño, extras, quitar ingredientes…)
 });
 
 export async function createProduct(negocioId, data) {
@@ -37,6 +38,7 @@ export async function createProduct(negocioId, data) {
 export async function updateProduct(id, patch) {
   const data = { ...patch };
   if ("imagen" in data && !data.imagen) data.imagen = deleteField(); // quitar la foto
+  if ("opciones" in data && !data.opciones?.length) data.opciones = deleteField(); // quitar las opciones
   await updateDoc(doc(db, "products", id), data);
 }
 

@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Store, MapPin, User, ShoppingBag, Compass, Package, LayoutDashboard, ReceiptText, Utensils, Coffee, CakeSlice, Search, ArrowUpRight, Bike, Grid2X2 } from './Icons';
-import './KliparkDashboard.css';
+import { Store, User, ShoppingBag, Compass, Package, LayoutDashboard, ReceiptText, Utensils, Coffee, CakeSlice, Bike } from './Icons';
+import { MarketHome, TopBar, StoreModal, CartDrawer } from './MarketView';
 import BusinessProducts from './BusinessProducts';
 import BusinessProfile from './BusinessProfile';
 import ClientProfile from './ClientProfile';
+import ProductOptionEditor from './ProductOptionEditor';
 import { listProducts, friendlyProductError } from './productService';
 import { watchNegocios, watchNegocio, updateNegocio, watchOrders, createOrder, advanceOrder, acceptOrder, cancelOrder, friendlyMarketError } from './marketService';
 
 const DELIVERY_FEE = 20; // Envío fijo por ahora
+const FREE_SHIPPING_FROM = 250; // Envío gratis desde este subtotal (pon 0 para desactivar)
 const statusLabels = ['Esperando aceptación', 'En preparación', 'Listo para entregar', 'Entregado', 'Cancelado'];
 const ICONS = { Comida: Utensils, Bebidas: Coffee, Postres: CakeSlice };
 const COVERS = { Postres: 'cake', Bebidas: 'coffee' };
@@ -26,6 +28,13 @@ const DIAS_RESUMEN = [
   { id: 'domingo', nombre: 'Dom' }
 ];
 
+const DAY_IDS = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+const todayText = h => {
+  if (!h || typeof h !== 'object') return '';
+  const d = h[DAY_IDS[new Date().getDay()]];
+  return d?.activo && d?.apertura && d?.cierre ? `Hoy ${d.apertura} - ${d.cierre}` : 'Hoy cerrado';
+};
+
 const goTo = id => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
 function Button({ children, secondary = false, className = '', ...props }) {
@@ -41,7 +50,7 @@ function Gallery({ photos, fallback: Fallback }) {
   const n = photos.length;
   useEffect(() => {
     if (n < 2) return;
-    const t = setInterval(() => setI(p => (p + 1) % n), 4500);
+    const t = setInterval(() => setI(p => (p + 1) % n), 3500);
     return () => clearInterval(t);
   }, [n]);
   if (!n) return <div className="gal-empty"><Fallback aria-hidden="true" /></div>;
@@ -81,50 +90,13 @@ function StoreHero({ store, products, onBack, canOrder }) {
   );
 }
 
-/* Tarjeta pequeña: foto + nombre */
-function StoreTile({ store, photo, onOpen, tabIndex = 0 }) {
-  const closed = store.abierto === false;
-  return (
-    <button type="button" className="tile" onClick={onOpen} tabIndex={tabIndex}>
-      <div className="tile-img">
-        {photo ? <img src={photo} alt="" loading="lazy" /> : <store.Icon aria-hidden="true" />}
-        <span className={`tile-st ${closed ? 'off' : ''}`}>{closed ? 'Cerrado' : 'Abierto'}</span>
-      </div>
-      <strong>{store.nombre}</strong>
-      <small>{store.categoria || 'Negocio local'}</small>
-    </button>
-  );
-}
-
-/* Carrusel compacto de negocios: se mueve solo, en bucle continuo */
-function StoreStrip({ stores, photoOf, onOpen }) {
-  if (!stores.length) return null;
-  // Repite la lista hasta que cada tanda mida lo suficiente para llenar la pantalla
-  const reps = Math.max(1, Math.ceil(8 / stores.length));
-  const set = Array.from({ length: reps }, () => stores).flat();
-  const seconds = Math.max(20, set.length * 4.5);
-  return (
-    <section className="strip" aria-label="Negocios destacados">
-      <div className="strip-move" style={{ animationDuration: `${seconds}s` }}>
-        {[0, 1].map(copy => (
-          <div className="strip-set" key={copy} aria-hidden={copy === 1}>
-            {set.map((s, k) => (
-              <StoreTile key={`${copy}-${k}-${s.id}`} store={s} photo={photoOf(s)} onOpen={() => onOpen(s.id)} tabIndex={copy === 1 ? -1 : 0} />
-            ))}
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function OrderCard({ order, business = false, onAdvance, onCancel }) {
   return <section className="panel">
     <div className="row"><h2>Pedido #{order.id.slice(0, 6).toUpperCase()}</h2><span className="badge">{statusLabels[order.estado]}</span></div>
     <p className="muted" style={{ marginTop: 8 }}>{business ? `Cliente: ${order.clienteNombre}` : order.negocioNombre} · {order.recoger ? 'Recoger en local' : 'Entrega a domicilio'}</p>
     {business && !order.recoger && order.direccion && <p className="muted">Entregar en: {order.direccion}</p>}
     {business && order.clienteCel && <p className="muted">Teléfono del cliente: {order.clienteCel}</p>}
-    {order.items.map(item => <div className="order row" key={item.id}><span>{item.quantity} × {item.name}</span><strong>{money(item.price * item.quantity)}</strong></div>)}
+    {order.items.map((item, i) => <div className="order row" key={(item.key || item.id) + i}><span>{item.quantity} × {item.name}{item.detalle?.length > 0 && <small style={{ display: 'block', opacity: .75 }}>{item.detalle.join(' · ')}</small>}{item.nota && <small style={{ display: 'block', opacity: .75, fontStyle: 'italic' }}>“{item.nota}”</small>}</span><strong>{money(item.price * item.quantity)}</strong></div>)}
     <div className="total row"><strong>Total</strong><h2>{money(order.total)}</h2></div>
     {business
       ? order.estado < 3 && <><Button onClick={() => onAdvance(order)}>{['Aceptar y preparar', 'Marcar como listo', 'Confirmar entrega'][order.estado]}</Button>{' '}<Button secondary onClick={() => onCancel(order)}>Cancelar pedido</Button></>
@@ -145,6 +117,7 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
   const [productsError, setProductsError] = useState('');
   const [storeId, setStoreId] = useState(null);
   const [storeProducts, setStoreProducts] = useState(null);
+  const [storeModal, setStoreModal] = useState(false);   // ventana grande del menú de un local
   const [covers, setCovers] = useState({});            // fotos de productos por negocio
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('Todo');
@@ -152,6 +125,7 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
   const [pickup, setPickup] = useState(false);
   const [notice, setNotice] = useState('');
   const [sending, setSending] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
   const [railOpen, setRailOpen] = useState(false);   // menú lateral expandido (táctil)
   const [toCancel, setToCancel] = useState(null); // pedido pendiente de confirmar cancelación
   const fail = e => setNotice(friendlyMarketError(e));
@@ -169,10 +143,16 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
     if (role === 'client' && !guest && uid) return watchOrders('clienteId', uid, setOrders, fail);
   }, [role, guest, uid]);
   useEffect(() => {
-    if (page !== 'Tienda' || !storeId) return;
+    if ((page !== 'Tienda' && !storeModal) || !storeId) return;
     setStoreProducts(null);
     listProducts(storeId).then(setStoreProducts).catch(e => { setStoreProducts([]); fail(e); });
-  }, [page, storeId]);
+  }, [page, storeId, storeModal]);
+  // los avisos desaparecen solos
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(''), 4500);
+    return () => clearTimeout(t);
+  }, [notice]);
   // Trae hasta 4 fotos de productos por negocio para las tarjetas
   useEffect(() => {
     if (role !== 'client' || !negocios) return;
@@ -192,7 +172,7 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
   const shownProducts = role === 'business' ? products : storeProducts;
   const quantity = cart?.items.reduce((sum, item) => sum + item.quantity, 0) || 0;
   const subtotal = cart?.items.reduce((sum, item) => sum + item.quantity * item.price, 0) || 0;
-  const fee = pickup ? 0 : DELIVERY_FEE;
+  const fee = pickup || (FREE_SHIPPING_FROM > 0 && subtotal >= FREE_SHIPPING_FROM) ? 0 : DELIVERY_FEE;
   const total = subtotal + fee;
   const completed = orders.filter(o => o.estado === 3);
   const lowLimit = myNegocio?.umbral ?? 5;
@@ -200,34 +180,38 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
   const visible = (negocios || []).filter(n => (category === 'Todo' || n.categoria === category) && (n.nombre || '').toLocaleLowerCase('es').includes(query.toLocaleLowerCase('es')));
 
   const photoOf = s => s.portada || covers[s.id]?.[0] || s.logo || '';
-  const openStore = id => { setStoreId(id); setPage('Tienda'); setNotice(''); };
+  const openStore = id => { setStoreId(id); setStoreModal(true); setNotice(''); };
 
-  function addProduct(product) {
+  function addProduct(product, config) {
     if (cart && cart.storeId !== store.id) { setNotice('Tu carrito pertenece a otro negocio. Finaliza o vacía ese carrito antes de comprar aquí.'); return; }
-    const inCart = cart?.items.find(item => item.id === product.id)?.quantity || 0;
-    if (typeof product.stock === 'number' && inCart >= product.stock) { setNotice('No hay más existencias de este producto.'); return; }
+    const qty = config?.qty || 1;
+    const key = config?.key || product.id;
+    const unit = config?.price ?? product.price;
+    const inCart = (cart?.items || []).filter(item => item.id === product.id).reduce((sum, item) => sum + item.quantity, 0);
+    if (typeof product.stock === 'number' && inCart + qty > product.stock) { setNotice('No hay más existencias de este producto.'); return; }
     setCart(previous => {
       const items = previous?.items || [];
-      const exists = items.some(item => item.id === product.id);
-      return { storeId: store.id, storeName: store.nombre, items: exists ? items.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item) : [...items, { id: product.id, name: product.name, price: product.price, quantity: 1 }] };
+      const exists = items.some(item => (item.key || item.id) === key);
+      const line = { key, id: product.id, name: product.name, price: unit, image: product.imagen || '', detalle: config?.detalle || [], nota: config?.nota || '', quantity: qty };
+      return { storeId: store.id, storeName: store.nombre, items: exists ? items.map(item => (item.key || item.id) === key ? { ...item, quantity: item.quantity + qty } : item) : [...items, line] };
     });
     setNotice('Producto agregado al carrito.');
   }
-  function changeQuantity(id, amount) {
+  function changeQuantity(key, amount) {
     setCart(previous => {
       if (!previous) return null;
-      const items = previous.items.map(item => item.id === id ? { ...item, quantity: item.quantity + amount } : item).filter(item => item.quantity > 0);
+      const items = previous.items.map(item => (item.key || item.id) === key ? { ...item, quantity: item.quantity + amount } : item).filter(item => item.quantity > 0);
       return items.length ? { ...previous, items } : null;
     });
   }
   async function confirmOrder() {
     if (guest) { onRequestLogin?.(); return; }
     if (!cart || sending) return;
-    if (!pickup && !me.direccion) { setNotice('Agrega tu dirección de entrega en Mi perfil, o elige Recoger.'); setPage('Mi perfil'); return; }
+    if (!pickup && !me.direccion) { setNotice('Agrega tu dirección de entrega en Mi perfil, o elige Recoger.'); setCartOpen(false); setPage('Mi perfil'); return; }
     setSending(true);
     try {
       await createOrder({ negocioId: cart.storeId, negocioNombre: cart.storeName, clienteId: uid, clienteNombre: me.nombre || 'Cliente', clienteCel: me.cel || '', direccion: pickup ? '' : me.direccion, items: cart.items, subtotal, envio: fee, total, recoger: pickup });
-      setCart(null); setPage('Mi pedido'); setNotice('¡Pedido enviado! El negocio lo verá de inmediato.');
+      setCart(null); setCartOpen(false); setPage('Mi pedido'); setNotice('¡Pedido enviado! El negocio lo verá de inmediato.');
     } catch (e) { fail(e); } finally { setSending(false); }
   }
   const advance = async order => {
@@ -250,11 +234,129 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
   const navigation = role === 'client'
     ? [['Explorar', Compass, 'Negocios cerca de ti'], ['Mi pedido', Package, 'Sigue tus pedidos'], ...(guest ? [] : [['Mi perfil', User, 'Tus datos y dirección']])]
     : [['Resumen', LayoutDashboard, 'Tu operación del día'], ['Pedidos', ReceiptText, pending ? `${pending} por atender` : 'Sin pendientes'], ['Productos', Utensils, 'Tu menú y existencias'], ['Mi negocio', Store, 'Perfil y horario']];
-  const go = label => { setPage(label); setNotice(''); setRailOpen(false); };
+  const go = label => { setPage(label); setNotice(''); setRailOpen(false); setStoreModal(false); };
   const backPage = role === 'business' ? 'Mi negocio' : 'Explorar';
 
-  return <div id="cerca-pro">
+  const toCard = n => ({
+    id: n.id,
+    name: n.nombre,
+    description: n.descripcion || `Negocio local · ${n.categoria}`,
+    categoryLabel: n.categoria || 'Local',
+    image: photoOf(n),
+    open: n.abierto !== false,
+    deliveryFee: DELIVERY_FEE,
+    time: n.tiempoEntrega || '',
+    featured: !!n.destacado,
+    logo: n.logo || '',
+    schedule: todayText(n.horario),
+    horario: n.horario || null,
+    telefono: n.telefono || '',
+    Icon: n.Icon,
+  });
+
+  const modalProducts = (storeProducts || []).map(p => ({
+    ...p,
+    soldOut: soldOut(p),
+    low: typeof p.stock === 'number' && p.stock > 0 && p.stock <= (store?.umbral ?? 5),
+  }));
+
+  const topBar = role === 'client' ? (
+    <TopBar
+      address={me.direccion || 'Agrega tu dirección'}
+      query={query}
+      onQuery={setQuery}
+      onHome={() => go('Explorar')}
+      onAddress={() => go(guest ? 'Explorar' : 'Mi perfil')}
+      onOrders={() => go('Mi pedido')}
+      onProfile={() => go('Mi perfil')}
+      onCart={() => setCartOpen(true)}
+      onLogout={onLogout}
+      activeOrders={pending}
+      cartCount={quantity}
+      initials={(me.nombre || 'Cliente').slice(0, 2).toUpperCase()}
+      name={me.nombre || 'Mi cuenta'}
+      guest={guest}
+    />
+  ) : null;
+
+  const cartDrawer = role === 'client' ? (
+    <CartDrawer
+      open={cartOpen}
+      cart={cart}
+      subtotal={subtotal}
+      fee={fee}
+      total={total}
+      pickup={pickup}
+      onPickup={setPickup}
+      freeFrom={FREE_SHIPPING_FROM}
+      sending={sending}
+      guest={guest}
+      address={me.direccion || ''}
+      notice={cartOpen ? notice : ''}
+      onChange={changeQuantity}
+      onClear={() => setCart(null)}
+      onConfirm={confirmOrder}
+      onClose={() => setCartOpen(false)}
+      onLogin={onRequestLogin}
+      onAddAddress={() => { setCartOpen(false); go(guest ? 'Explorar' : 'Mi perfil'); }}
+    />
+  ) : null;
+
+  // Pantalla Explorar del cliente: FUERA de #cerca-pro para que tu CSS viejo no la afecte
+  if (role === 'client' && page === 'Explorar') {
+    return <>
+      {topBar}
+      <div className="mv-root min-h-screen bg-brand-surface text-brand-charcoal">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-16">
+          {guest && (
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-brand-coralLight px-5 py-3 text-sm font-semibold text-brand-coral">
+              <span>Estás explorando como invitado.</span>
+              <button type="button" onClick={onRequestLogin} className="rounded-xl bg-brand-coral px-4 py-2 text-xs font-bold text-white">Iniciar sesión para comprar</button>
+            </div>
+          )}
+          {notice && <div role="status" className="mb-6 rounded-2xl bg-brand-mintLight px-5 py-3 text-sm font-semibold text-emerald-800">{notice}</div>}
+          <MarketHome
+            showSearch={false}
+            stores={visible.map(toCard)}
+            loading={negocios === null}
+            greeting={me.nombre ? `Hola, ${me.nombre}. ¿Qué se te antoja?` : '¿Qué se te antoja hoy?'}
+            address={me.direccion || 'Agrega tu dirección en Mi perfil'}
+            query={query}
+            onQuery={setQuery}
+            category={category}
+            onCategory={setCategory}
+            onOpen={openStore}
+          />
+        </main>
+        <p className="pb-8 text-center text-xs text-gray-400">KliparkLob · Tu tienda, más cerca de ti</p>
+      </div>
+      {cartDrawer}
+      {storeModal && store && (
+        <StoreModal
+          key={store.id}
+          store={toCard(store)}
+          products={modalProducts}
+          loading={storeProducts === null}
+          cartItems={cart?.storeId === store.id ? cart.items : []}
+          cartCount={quantity}
+          cartTotal={subtotal}
+          canOrder={store.abierto !== false}
+          notice={notice}
+          onAdd={addProduct}
+          onChange={changeQuantity}
+          onClose={() => setStoreModal(false)}
+          onCart={() => setCartOpen(true)}
+        />
+      )}
+    </>;
+  }
+
+  return <>
+  {topBar}
+  {cartDrawer}
+  <div id="cerca-pro" className={role === 'client' ? 'mv' : ''}>
     <div className="app">
+      {role === 'business' && (
       <aside className={`rail ${railOpen ? 'open' : ''}`} aria-label="Navegación principal">
         <button type="button" className="rail-logo" onClick={() => setRailOpen(o => !o)} aria-expanded={railOpen} aria-label="Mostrar u ocultar menú">
           <span className="rail-ico"><Store aria-hidden="true" /></span>
@@ -287,31 +389,10 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
           </button>
         </div>
       </aside>
+      )}
 
       <div className="kl-main">
       <main>{guest && <div className="notice row"><span>Estás explorando como invitado.</span><Button secondary onClick={onRequestLogin}>Iniciar sesión para comprar</Button></div>}<div aria-live="polite">{notice && <div className="notice">{notice}</div>}</div>
-
-      {role === 'client' && page === 'Explorar' && <>
-        <div className="ex-bar">
-          <div>
-            <h1>{me.nombre ? `Hola, ${me.nombre}. ¿Qué se te antoja?` : '¿Qué se te antoja hoy?'}</h1>
-            <p className="ex-addr"><MapPin aria-hidden="true" />{me.direccion || 'Agrega tu dirección en Mi perfil'}</p>
-          </div>
-          <label className="search"><Search aria-hidden="true" /><input aria-label="Buscar negocios" placeholder="Busca tu negocio favorito" value={query} onChange={e => setQuery(e.target.value)} /></label>
-        </div>
-
-        {negocios === null && <p className="muted">Cargando negocios…</p>}
-        <StoreStrip stores={visible} photoOf={photoOf} onOpen={openStore} />
-
-        <div className="filters">{[['Todo', Grid2X2], ['Comida', Utensils], ['Bebidas', Coffee], ['Postres', CakeSlice]].map(([label, Icon]) =>
-          <button type="button" key={label} aria-pressed={category === label} onClick={() => setCategory(label)}><Icon aria-hidden="true" />{label}</button>)}</div>
-
-        <div className="section-heading"><h2>Todos los negocios</h2><span>{visible.length} cerca de ti</span></div>
-        <div className="tile-grid" id="cerca-stores">
-          {visible.map(s => <StoreTile key={s.id} store={s} photo={photoOf(s)} onOpen={() => openStore(s.id)} />)}
-        </div>
-        {negocios && !visible.length && <p className="muted">No encontramos negocios con esa búsqueda.</p>}
-      </>}
 
       {((role === 'client' && page === 'Tienda') || (role === 'business' && page === 'Escaparate')) && (store ? <>
         <StoreHero store={store} products={shownProducts} onBack={() => setPage(backPage)} canOrder={role === 'client' && store.abierto !== false} />
@@ -335,7 +416,7 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
             </div>
           )}
           <div className="total row"><strong>{quantity} producto(s)</strong><strong>{money(subtotal)}</strong></div>
-          {role === 'client' && <Button onClick={() => setPage('Carrito')}>Revisar carrito</Button>}
+          {role === 'client' && <Button onClick={() => setCartOpen(true)}>Revisar carrito</Button>}
         </section></div>
       </> : <section className="panel"><p className="muted">Cargando negocio…</p><Button secondary onClick={() => setPage(backPage)}>Volver</Button></section>)}
 
@@ -364,5 +445,6 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
     </div>
     {toCancel && <div className="modal-bg" onClick={() => setToCancel(null)}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="cancel-title" onClick={e => e.stopPropagation()} onKeyDown={e => e.key === 'Escape' && setToCancel(null)}><h2 id="cancel-title">¿Cancelar este pedido?</h2><p className="muted">El cliente verá que el pedido fue cancelado.{toCancel.estado >= 1 ? ' Las existencias descontadas se devolverán al inventario.' : ''}</p><div className="modal-actions"><button type="button" className="secondary" autoFocus onClick={() => setToCancel(null)}>No, conservar</button><button type="button" className="danger" onClick={confirmCancel}>Sí, cancelar pedido</button></div></div></div>}
     <p className="foot">KliparkLob · Tu tienda, más cerca de ti</p>
-  </div>;
+  </div>
+  </>;
 }

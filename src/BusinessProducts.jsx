@@ -1,4 +1,5 @@
 import { useState } from "react";
+import ProductOptionsEditor, { cleanOptions } from "./ProductOptionEditor";
 import { createProduct, updateProduct, removeProduct, compressImage, friendlyProductError } from "./productService";
 
 const CATEGORIAS = ["Comida", "Bebidas", "Postres"];
@@ -10,6 +11,7 @@ const stockLabel = (p, limit = LOW_STOCK) => typeof p.stock !== "number" ? "Sin 
 /** Catálogo del negocio: lista, alta, edición y borrado de productos (con foto y descripción). */
 export default function BusinessProducts({ negocioId, items, onChange, loadError, lowStock = LOW_STOCK }) {
   const [form, setForm] = useState(EMPTY);
+  const [opciones, setOpciones] = useState([]);
   const [editing, setEditing] = useState(null);
   const [msg, setMsg] = useState(loadError || "");
   const [busy, setBusy] = useState(false);
@@ -32,6 +34,7 @@ export default function BusinessProducts({ negocioId, items, onChange, loadError
 
   function reset() {
     setForm(EMPTY);
+    setOpciones([]);
     setEditing(null);
     setFileKey((k) => k + 1);
   }
@@ -46,12 +49,12 @@ export default function BusinessProducts({ negocioId, items, onChange, loadError
     setBusy(true);
     try {
       if (editing) {
-        const patch = { name: form.name.trim(), price, description: form.description.trim(), categoria: form.categoria, imagen: form.imagen, stock };
+        const patch = { name: form.name.trim(), price, description: form.description.trim(), categoria: form.categoria, imagen: form.imagen, stock, opciones: cleanOptions(opciones) };
         await updateProduct(editing, patch);
         onChange(items.map((p) => (p.id === editing ? { ...p, ...patch } : p)));
         setMsg("Producto actualizado.");
       } else {
-        const created = await createProduct(negocioId, form);
+        const created = await createProduct(negocioId, { ...form, opciones: cleanOptions(opciones) });
         onChange([...items, created]);
         setMsg("Producto agregado al catálogo.");
       }
@@ -66,6 +69,7 @@ export default function BusinessProducts({ negocioId, items, onChange, loadError
   function startEdit(p) {
     setEditing(p.id);
     setForm({ name: p.name, price: String(p.price), description: p.description || "", categoria: p.categoria || "", imagen: p.imagen || "", stock: String(p.stock ?? "") });
+    setOpciones(p.opciones || []);
     setFileKey((k) => k + 1);
     setMsg("");
   }
@@ -115,6 +119,7 @@ export default function BusinessProducts({ negocioId, items, onChange, loadError
               <h3>{p.name}</h3>
               <p className="muted">{money(p.price)}{p.categoria ? ` · ${p.categoria}` : ""}</p>
               {p.description && <p className="muted">{p.description}</p>}
+              {p.opciones?.length > 0 && <p className="muted">Personalizable: {p.opciones.map((g) => g.titulo).join(", ")}</p>}
               <p className="muted"><strong>{stockLabel(p, lowStock)}</strong>{" "}
                 <button type="button" className="link-btn" aria-label={`Quitar una unidad de ${p.name}`} onClick={() => changeStock(p, -1)}>− 1</button>{" "}
                 <button type="button" className="link-btn" aria-label={`Agregar una unidad de ${p.name}`} onClick={() => changeStock(p, 1)}>+ 1</button>
@@ -149,6 +154,7 @@ export default function BusinessProducts({ negocioId, items, onChange, loadError
             {CATEGORIAS.map((c) => <option key={c}>{c}</option>)}
           </select>
         </label>
+        <ProductOptionsEditor value={opciones} onChange={setOpciones} />
         <label className="field">Foto (opcional)
           <input key={fileKey} type="file" accept="image/*" onChange={pickImage} />
         </label>
