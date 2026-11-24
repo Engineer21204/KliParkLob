@@ -34,7 +34,14 @@ export default function App() {
   }
 
   if (checking) {
-    return <div className="kl"><main className="kl-card"><p className="sub">Cargando…</p></main></div>;
+    return (
+      <div className="mv-root flex min-h-screen items-center justify-center bg-gradient-to-br from-orange-100 via-brand-surface to-emerald-100">
+        <div className="flex flex-col items-center gap-4">
+          <span className="h-10 w-10 animate-spin rounded-full border-4 border-brand-coral/20 border-t-brand-coral" />
+          <p className="font-display text-sm font-bold text-gray-500">Cargando…</p>
+        </div>
+      </div>
+    );
   }
   if (!session) {
     return <KliparkLobAuth initialScreen={authScreen}

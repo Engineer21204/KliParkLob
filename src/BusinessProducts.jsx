@@ -106,81 +106,127 @@ export default function BusinessProducts({ negocioId, items, onChange, loadError
     }
   }
 
+  const input = "w-full rounded-2xl border-2 border-gray-200 bg-white px-4 py-3 text-sm font-medium text-brand-charcoal outline-none transition placeholder:text-gray-400 focus:border-brand-coral focus:ring-4 focus:ring-brand-coral/10";
+  const lab = "block text-xs font-extrabold uppercase tracking-wider text-gray-500";
+  const card = "rounded-[26px] border border-white/80 bg-white/85 p-6 shadow-[0_4px_20px_-2px_rgba(20,20,22,0.08)] backdrop-blur sm:p-7";
+  const stockTone = (p) => typeof p.stock !== "number" ? "bg-gray-100 text-gray-500" : p.stock === 0 ? "bg-red-100 text-red-700" : p.stock <= lowStock ? "bg-amber-100 text-amber-800" : "bg-brand-mintLight text-emerald-700";
+
   return (
-    <div className="orders">
-      <section className="panel">
-        <h2>Catálogo del negocio</h2>
-        {items === null && <p className="muted" style={{ marginTop: 12 }}>Cargando productos…</p>}
-        {items?.length === 0 && <p className="muted" style={{ marginTop: 12 }}>Aún no tienes productos. Agrega el primero con el formulario.</p>}
-        {items?.map((p) => (
-          <div className="product" key={p.id}>
-            <div className="product-art">{p.imagen ? <img src={p.imagen} alt="" /> : <span aria-hidden="true">🛍️</span>}</div>
-            <div className="product-info">
-              <h3>{p.name}</h3>
-              <p className="muted">{money(p.price)}{p.categoria ? ` · ${p.categoria}` : ""}{p.prepMin ? ` · ${p.prepMin} min` : ""}</p>
-              {p.description && <p className="muted">{p.description}</p>}
-              {p.opciones?.length > 0 && <p className="muted">Personalizable: {p.opciones.map((g) => g.titulo).join(", ")}</p>}
-              <p className="muted"><strong>{stockLabel(p, lowStock)}</strong>{" "}
-                <button type="button" className="link-btn" aria-label={`Quitar una unidad de ${p.name}`} onClick={() => changeStock(p, -1)}>− 1</button>{" "}
-                <button type="button" className="link-btn" aria-label={`Agregar una unidad de ${p.name}`} onClick={() => changeStock(p, 1)}>+ 1</button>
-              </p>
-              <p className="muted">
-                <label><input type="checkbox" checked={p.available} onChange={() => toggle(p)} /> Disponible</label>{" "}
-                <button type="button" className="link-btn" onClick={() => startEdit(p)}>Editar</button>{" "}
-                <button type="button" className="link-btn" onClick={() => setToDelete(p)}>Eliminar</button>
-              </p>
-            </div>
-          </div>
-        ))}
+    <div className="mv-root grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
+      {/* Catálogo */}
+      <section className={card}>
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="font-display text-2xl font-extrabold text-brand-charcoal">Catálogo del negocio</h2>
+          {items?.length > 0 && <span className="text-sm font-bold text-gray-400">{items.length} productos</span>}
+        </div>
+        {items === null && <p className="mt-4 text-sm text-gray-500">Cargando productos…</p>}
+        {items?.length === 0 && (
+          <div className="mt-5 rounded-2xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">Aún no tienes productos. Agrega el primero con el formulario.</div>
+        )}
+
+        <ul className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+          {items?.map((p) => (
+            <li key={p.id} className={`rounded-[22px] border p-4 transition ${editing === p.id ? "border-brand-coral bg-brand-coralLight/40" : "border-gray-100 bg-white"} ${p.available === false ? "opacity-70" : ""}`}>
+              <div className="flex gap-4">
+                <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-gray-100">
+                  {p.imagen ? <img src={p.imagen} alt="" className="h-full w-full object-cover" /> : <div className="grid h-full w-full place-items-center text-3xl" aria-hidden="true">🛍️</div>}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate font-display text-lg font-extrabold text-brand-charcoal">{p.name}</h3>
+                  <p className="text-sm font-bold text-brand-coral">{money(p.price)}<span className="font-medium text-gray-400">{p.categoria ? ` · ${p.categoria}` : ""}{p.prepMin ? ` · ${p.prepMin} min` : ""}</span></p>
+                  {p.description && <p className="mt-1 line-clamp-2 text-xs text-gray-500">{p.description}</p>}
+                  {p.opciones?.length > 0 && <p className="mt-1 text-xs font-semibold text-gray-500">Personalizable: {p.opciones.map((g) => g.titulo).join(", ")}</p>}
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${stockTone(p)}`}>{stockLabel(p, lowStock)}</span>
+                  <span className="flex items-center rounded-full border border-gray-200 bg-white">
+                    <button type="button" aria-label={`Quitar una unidad de ${p.name}`} onClick={() => changeStock(p, -1)} className="h-8 w-8 text-base font-bold text-gray-600 transition hover:bg-gray-100 rounded-full">−</button>
+                    <button type="button" aria-label={`Agregar una unidad de ${p.name}`} onClick={() => changeStock(p, 1)} className="h-8 w-8 text-base font-bold text-brand-coral transition hover:bg-brand-coralLight rounded-full">+</button>
+                  </span>
+                </div>
+                <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-gray-600">
+                  <button type="button" role="switch" aria-checked={!!p.available} onClick={() => toggle(p)} className={`relative h-6 w-11 rounded-full transition ${p.available ? "bg-brand-mint" : "bg-gray-300"}`}>
+                    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${p.available ? "left-[22px]" : "left-0.5"}`} />
+                  </button>
+                  Disponible
+                </label>
+              </div>
+
+              <div className="mt-3 flex gap-2 border-t border-gray-100 pt-3">
+                <button type="button" onClick={() => startEdit(p)} className="rounded-xl border-2 border-gray-200 px-4 py-2 text-xs font-bold text-brand-charcoal transition hover:border-brand-coral/50">Editar</button>
+                <button type="button" onClick={() => setToDelete(p)} className="rounded-xl px-4 py-2 text-xs font-bold text-red-600 transition hover:bg-red-50">Eliminar</button>
+              </div>
+            </li>
+          ))}
+        </ul>
       </section>
 
-      <form className="panel" onSubmit={submit}>
-        <h2>{editing ? "Editar producto" : "Agregar producto"}</h2>
-        <label className="field">Nombre
-          <input required maxLength={100} value={form.name} onChange={set("name")} placeholder="Agua de jamaica" />
+      {/* Formulario */}
+      <form onSubmit={submit} className={`${card} space-y-5 xl:sticky xl:top-28`}>
+        <h2 className="font-display text-2xl font-extrabold text-brand-charcoal">{editing ? "Editar producto" : "Agregar producto"}</h2>
+
+        <label className={lab}>Nombre
+          <input required maxLength={100} value={form.name} onChange={set("name")} placeholder="Agua de jamaica" className={`${input} mt-2 normal-case tracking-normal`} />
         </label>
-        <label className="field">Precio en MXN
-          <input required type="number" min="0.01" step="0.01" value={form.price} onChange={set("price")} placeholder="25" />
+        <div className="grid grid-cols-2 gap-4">
+          <label className={lab}>Precio (MXN)
+            <input required type="number" min="0.01" step="0.01" value={form.price} onChange={set("price")} placeholder="25" className={`${input} mt-2 normal-case tracking-normal`} />
+          </label>
+          <label className={lab}>Existencias
+            <input required type="number" min="0" step="1" value={form.stock} onChange={set("stock")} placeholder="20" className={`${input} mt-2 normal-case tracking-normal`} />
+          </label>
+        </div>
+        <label className={lab}>Descripción
+          <textarea maxLength={500} rows={3} value={form.description} onChange={set("description")} placeholder="Agua fresca de 500 ml, sin conservadores." className={`${input} mt-2 resize-none normal-case tracking-normal`} />
         </label>
-        <label className="field">Descripción
-          <textarea maxLength={500} rows={3} value={form.description} onChange={set("description")} placeholder="Agua fresca de 500 ml, sin conservadores." />
-        </label>
-        <label className="field">Existencias (unidades disponibles)
-          <input required type="number" min="0" step="1" value={form.stock} onChange={set("stock")} placeholder="20" />
-        </label>
-        <label className="field">Tiempo de preparación en minutos (opcional)
-          <input type="number" min="1" max="180" step="1" value={form.prepMin} onChange={set("prepMin")} placeholder="10" />
-        </label>
-        <label className="field">Categoría
-          <select value={form.categoria} onChange={set("categoria")}>
-            <option value="">Sin categoría</option>
-            {CATEGORIAS.map((c) => <option key={c}>{c}</option>)}
-          </select>
-        </label>
+        <div className="grid grid-cols-2 gap-4">
+          <label className={lab}>Preparación (min)
+            <input type="number" min="1" max="180" step="1" value={form.prepMin} onChange={set("prepMin")} placeholder="10" className={`${input} mt-2 normal-case tracking-normal`} />
+          </label>
+          <label className={lab}>Categoría
+            <select value={form.categoria} onChange={set("categoria")} className={`${input} mt-2 normal-case tracking-normal`}>
+              <option value="">Sin categoría</option>
+              {CATEGORIAS.map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </label>
+        </div>
+
         <ProductOptionsEditor value={opciones} onChange={setOpciones} />
-        <label className="field">Foto (opcional)
-          <input key={fileKey} type="file" accept="image/*" onChange={pickImage} />
-        </label>
-        {form.imagen && (
-          <div className="prod-preview">
-            <img src={form.imagen} alt="Vista previa del producto" />
-            <button type="button" className="link-btn" onClick={() => { setForm({ ...form, imagen: "" }); setFileKey((k) => k + 1); }}>Quitar foto</button>
+
+        <div>
+          <span className={lab}>Foto (opcional)</span>
+          <div className="mt-2 flex flex-wrap items-center gap-4">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 text-[11px] font-bold text-gray-400">
+              {form.imagen ? <img src={form.imagen} alt="Vista previa del producto" className="h-full w-full object-cover" /> : "Foto"}
+            </div>
+            <label className="cursor-pointer rounded-2xl border-2 border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-brand-charcoal transition hover:border-brand-coral/50">
+              Elegir imagen
+              <input key={fileKey} type="file" accept="image/*" onChange={pickImage} className="hidden" />
+            </label>
+            {form.imagen && <button type="button" onClick={() => { setForm({ ...form, imagen: "" }); setFileKey((k) => k + 1); }} className="text-sm font-semibold text-red-600 underline underline-offset-2">Quitar foto</button>}
           </div>
-        )}
-        <button type="submit" className="primary" disabled={busy}>{busy ? "Guardando…" : editing ? "Guardar cambios" : "Guardar producto"}</button>{" "}
-        {editing && <button type="button" className="secondary" onClick={reset}>Cancelar</button>}
-        <p className="muted" aria-live="polite" style={{ marginTop: 12 }}>{msg}</p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <button type="submit" disabled={busy} className="rounded-2xl bg-brand-coral px-7 py-3.5 font-display text-base font-extrabold text-white shadow-[0_12px_28px_-6px_rgba(255,90,54,0.45)] transition hover:bg-brand-coralDark active:scale-95 disabled:opacity-60">
+            {busy ? "Guardando…" : editing ? "Guardar cambios" : "Guardar producto"}
+          </button>
+          {editing && <button type="button" onClick={reset} className="rounded-2xl border-2 border-gray-200 px-5 py-3 text-sm font-bold text-brand-charcoal">Cancelar</button>}
+        </div>
+        <p aria-live="polite" className={`text-sm font-semibold ${/agregado|actualizado|eliminado/i.test(msg) ? "text-emerald-700" : "text-red-600"}`}>{msg}</p>
       </form>
 
       {toDelete && (
-        <div className="modal-bg" onClick={() => setToDelete(null)}>
-          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="del-title"
-            onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && setToDelete(null)}>
-            <h2 id="del-title">¿Eliminar producto?</h2>
-            <p className="muted">«{toDelete.name}» se quitará del catálogo y los clientes ya no lo verán. Esta acción no se puede deshacer.</p>
-            <div className="modal-actions">
-              <button type="button" className="secondary" autoFocus onClick={() => setToDelete(null)}>Cancelar</button>
-              <button type="button" className="danger" onClick={confirmRemove}>Eliminar</button>
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm" onClick={() => setToDelete(null)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="del-title" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && setToDelete(null)} className="w-full max-w-md rounded-[28px] bg-white p-7 shadow-2xl">
+            <h2 id="del-title" className="font-display text-2xl font-extrabold text-brand-charcoal">¿Eliminar producto?</h2>
+            <p className="mt-2 text-sm text-gray-500">«{toDelete.name}» se quitará del catálogo y los clientes ya no lo verán. Esta acción no se puede deshacer.</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" autoFocus onClick={() => setToDelete(null)} className="rounded-2xl border border-gray-200 px-5 py-3 text-sm font-bold text-brand-charcoal">Cancelar</button>
+              <button type="button" onClick={confirmRemove} className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-bold text-white">Eliminar</button>
             </div>
           </div>
         </div>

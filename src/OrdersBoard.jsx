@@ -59,7 +59,7 @@ function Head({ order, badge, badgeBg }) {
  *        onAccept(order) [manual], onExtend(order,min), onFinishing(order), onFinish(order), onDeliver(order), onCancel(order),
  *        autoFailed (ids que no se aceptaron solos), notice
  */
-export default function OrdersBoard({ orders, autoPedidos, prepBaseMin, onToggleAuto, onSaveBase, onAccept, onExtend, onFinishing, onFinish, onDeliver, onCancel, autoFailed = [] }) {
+export default function OrdersBoard({ orders, autoPedidos, autoTotal = false, cloud = false, onToggleTotal, prepBaseMin, onToggleAuto, onSaveBase, onAccept, onExtend, onFinishing, onFinish, onDeliver, onCancel, autoFailed = [] }) {
   const now = useNow();
   const [base, setBase] = useState(String(prepBaseMin || 15));
   const [showHist, setShowHist] = useState(false);
@@ -74,7 +74,7 @@ export default function OrdersBoard({ orders, autoPedidos, prepBaseMin, onToggle
   // Paso 9: cuando se cumple el tiempo, avisar al negocio ("programado para finalizar")
   useEffect(() => {
     prep.forEach((o) => {
-      if (o.listoMs && o.listoMs <= now && !o.porFinalizar && !asked.current.has(o.id)) {
+      if (!autoTotal && !cloud && o.listoMs && o.listoMs <= now && !o.porFinalizar && !asked.current.has(o.id)) {
         asked.current.add(o.id);
         onFinishing?.(o);
         try { if (window.Notification?.permission === 'granted') new Notification('Pedido por finalizar', { body: `El pedido #${short(o.id)} ya cumplió su tiempo estimado.` }); } catch { /* sin permiso */ }
@@ -95,6 +95,13 @@ export default function OrdersBoard({ orders, autoPedidos, prepBaseMin, onToggle
             <small style={{ display: 'block', color: C.mute }}>Si el negocio está abierto y hay existencias, el pedido pasa solo a «En preparación». Si no, se cancela con el motivo o espera tu decisión.</small>
           </span>
         </label>
+        <label style={{ display: 'flex', gap: 12, alignItems: 'center', cursor: 'pointer', maxWidth: 520, opacity: autoPedidos ? 1 : 0.5 }}>
+          <input type="checkbox" checked={autoTotal} disabled={!autoPedidos} onChange={(e) => onToggleTotal(e.target.checked)} style={{ width: 22, height: 22 }} />
+          <span>
+            <strong>Modo automático completo</strong>
+            <small style={{ display: 'block', color: C.mute }}>Al cumplirse el tiempo el pedido pasa solo a «Listos» y avisa al cliente; 30 min después se cierra como entregado. Si el negocio está cerrado, el pedido se cancela con aviso. Tú solo puedes agregar retrasos o cancelar.</small>
+          </span>
+        </label>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <label style={{ fontSize: 13, color: C.mute }}>Tiempo base de preparación (min)
             <input type="number" min="1" max="180" value={base} onChange={(e) => setBase(e.target.value)} style={{ display: 'block', marginTop: 4, width: 110, border: `1px solid ${C.line}`, borderRadius: 10, padding: '8px 10px', font: 'inherit' }} />
@@ -109,7 +116,7 @@ export default function OrdersBoard({ orders, autoPedidos, prepBaseMin, onToggle
       {/* Por aceptar (solo si hay: modo manual o pedidos que no se pudieron aceptar solos) */}
       {pend.length > 0 && (
         <section style={{ marginBottom: 20 }}>
-          <h3 style={{ margin: '0 0 10px' }}>Por aceptar ({pend.length})</h3>
+          <h3 style={{ margin: '0 0 10px', fontSize: 18, fontWeight: 800 }}>Por aceptar ({pend.length})</h3>
           <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))' }}>
             {pend.map((o) => {
               const waitingAuto = autoPedidos && !autoFailed.includes(o.id);
@@ -132,7 +139,7 @@ export default function OrdersBoard({ orders, autoPedidos, prepBaseMin, onToggle
       {/* Dos columnas por estado */}
       <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', alignItems: 'start' }}>
         <section>
-          <h3 style={{ margin: '0 0 10px' }}>En preparación ({prep.length})</h3>
+          <h3 style={{ margin: '0 0 10px', fontSize: 18, fontWeight: 800 }}>En preparación ({prep.length})</h3>
           <div style={{ display: 'grid', gap: 12 }}>
             {prep.length === 0 && <div style={{ ...card, color: C.mute, fontSize: 14 }}>Sin pedidos en preparación.</div>}
             {prep.map((o) => {
@@ -162,7 +169,7 @@ export default function OrdersBoard({ orders, autoPedidos, prepBaseMin, onToggle
         </section>
 
         <section>
-          <h3 style={{ margin: '0 0 10px' }}>Listos ({ready.length})</h3>
+          <h3 style={{ margin: '0 0 10px', fontSize: 18, fontWeight: 800 }}>Listos ({ready.length})</h3>
           <div style={{ display: 'grid', gap: 12 }}>
             {ready.length === 0 && <div style={{ ...card, color: C.mute, fontSize: 14 }}>Aún no hay pedidos listos.</div>}
             {ready.map((o) => (

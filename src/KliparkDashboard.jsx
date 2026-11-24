@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Store, User, ShoppingBag, Compass, Package, LayoutDashboard, ReceiptText, Utensils, Coffee, CakeSlice, Bike } from './Icons';
-import { MarketHome, TopBar, StoreModal, CartDrawer } from './MarketView';
+import { MarketHome, TopBar, StoreModal, CartDrawer, ClientOrders } from './MarketView';
 import BusinessProducts from './BusinessProducts';
 import BusinessProfile from './BusinessProfile';
 import ClientProfile from './ClientProfile';
 import { listProducts, friendlyProductError } from './productService';
 import { watchNegocios, watchNegocio, updateNegocio, watchOrders, createOrder, advanceOrder, acceptOrder, cancelOrder, friendlyMarketError, calcPrepMin, checkOrder, extendOrder, markFinishing, finishOrder } from './marketService';
+import { BizTopBar, BizSummary, BizConfirm } from './BusinessView';
 import OrdersBoard, { useNow, fmtLeft, fmtHour } from './OrdersBoard';
+
+// true = las Cloud Functions de Firebase aceptan, programan y notifican los pedidos (ya desplegadas).
+// false = todo lo hace el panel del negocio abierto en el navegador (Fase 1).
+const CLOUD_AUTOMATION = false;
 
 const DELIVERY_FEE = 20; // Envío fijo por ahora
 const FREE_SHIPPING_FROM = 250; // Envío gratis desde este subtotal (pon 0 para desactivar)
@@ -125,6 +130,7 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
   const [storeProducts, setStoreProducts] = useState(null);
   const [storeModal, setStoreModal] = useState(false);   // ventana grande del menú de un local
   const [covers, setCovers] = useState({});            // fotos de productos por negocio
+  const [dishes, setDishes] = useState({});            // platillos con foto por negocio (para el carrusel)
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('Todo');
   const [cart, setCart] = useState(null);
@@ -142,7 +148,9 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
   const autoBusy = useRef(false);
   const autoTried = useRef(new Set());
   const autoAccept = myNegocio ? myNegocio.autoPedidos !== false : false;
-  const toggleAuto = on => updateNegocio(uid, { autoPedidos: on }).catch(fail);
+  const autoTotal = autoAccept && myNegocio?.autoTotal === true;
+  const toggleAuto = on => updateNegocio(uid, on ? { autoPedidos: true } : { autoPedidos: false, autoTotal: false }).catch(fail);
+  const toggleTotal = on => updateNegocio(uid, { autoTotal: on }).catch(fail);
   const saveBase = min => {
     if (!(min >= 1 && min <= 180)) { setNotice('El tiempo base debe estar entre 1 y 180 minutos.'); return; }
     updateNegocio(uid, { prepBaseMin: Math.round(min) }).then(() => setNotice('Tiempo base guardado.')).catch(fail);
@@ -174,7 +182,7 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
     });
   }, [orders, role]);
   useEffect(() => {
-    if (role !== 'business' || !autoAccept || products === null || !myNegocio || autoBusy.current) return;
+    if (CLOUD_AUTOMATION || role !== 'business' || !autoAccept || products === null || !myNegocio || autoBusy.current) return;
     const next = orders.find(o => o.estado === 0 && !autoTried.current.has(o.id));
     if (!next) return;
     autoBusy.current = true;
@@ -186,6 +194,9 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
           const prepMin = calcPrepMin(next.items, products, myNegocio, next.recoger);
           setProducts(await acceptOrder(next, products, { prepMin })); // valida, descuenta existencias y pasa a "En preparación"
           setNotice(`Pedido #${next.id.slice(0, 6).toUpperCase()} aceptado automáticamente (${prepMin} min).`);
+        } else if (check.tipo === 'cerrado' && autoTotal) {
+          setProducts(await cancelOrder(next, products, check.motivo, 'sistema')); // modo completo: se cancela con aviso al cliente
+          setNotice(`Pedido #${next.id.slice(0, 6).toUpperCase()} cancelado: ${check.motivo}`);
         } else if (check.tipo === 'cerrado') {
           setAutoFailed(list => [...list, next.id]); // queda pendiente para decisión del negocio
           setNotice(`Pedido #${next.id.slice(0, 6).toUpperCase()} recibido con el negocio cerrado. Decide si lo aceptas.`);
@@ -201,7 +212,33 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
         setAutoTick(t => t + 1);
       }
     })();
-  }, [role, orders, products, myNegocio, autoAccept, autoTick]);
+  }, [role, orders, products, myNegocio, autoAccept, autoTotal, autoTick]);
+
+  // Modo automático completo: al terminar el tiempo pasa a "Listo"; 30 min después se cierra como entregado
+  const ordersRef = useRef(orders);
+  ordersRef.current = orders;
+  const autoMoved = useRef(new Set());
+  useEffect(() => {
+    if (CLOUD_AUTOMATION || role !== 'business' || !autoTotal) return;
+    const AUTO_CLOSE_MS = 30 * 60000;
+    const tick = () => {
+      const now = Date.now();
+      ordersRef.current.forEach(o => {
+        const key1 = o.id + ':1', key2 = o.id + ':2';
+        if (o.estado === 1 && o.listoMs && o.listoMs <= now && !autoMoved.current.has(key1)) {
+          autoMoved.current.add(key1);
+          finishOrder(o.id).then(() => setNotice(`Pedido #${o.id.slice(0, 6).toUpperCase()} listo automáticamente. Se avisó al cliente.`)).catch(e => { autoMoved.current.delete(key1); fail(e); });
+        }
+        if (o.estado === 2 && !autoMoved.current.has(key2) && now - (o.listoRealMs || now) >= AUTO_CLOSE_MS && o.listoRealMs) {
+          autoMoved.current.add(key2);
+          advanceOrder(o.id, 3).catch(e => { autoMoved.current.delete(key2); fail(e); });
+        }
+      });
+    };
+    tick();
+    const t = setInterval(tick, 5000);
+    return () => clearInterval(t);
+  }, [role, autoTotal]);
   useEffect(() => {
     if (role === 'client' && !guest && uid) return watchOrders('clienteId', uid, setOrders, fail);
   }, [role, guest, uid]);
@@ -223,8 +260,12 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
     negocios.forEach(n => {
       if (covers[n.id] !== undefined) return;
       listProducts(n.id)
-        .then(list => { if (alive) setCovers(c => ({ ...c, [n.id]: list.filter(p => p.imagen).slice(0, 4).map(p => p.imagen) })); })
-        .catch(() => { if (alive) setCovers(c => ({ ...c, [n.id]: [] })); });
+        .then(list => {
+          if (!alive) return;
+          setCovers(c => ({ ...c, [n.id]: list.filter(p => p.imagen).slice(0, 4).map(p => p.imagen) }));
+          setDishes(d => ({ ...d, [n.id]: list.filter(p => p.imagen && p.available !== false && p.stock !== 0).slice(0, 6).map(p => ({ id: p.id, name: p.name, price: p.price, image: p.imagen, description: p.description || '', storeId: n.id, storeName: n.nombre, open: n.abierto !== false })) }));
+        })
+        .catch(() => { if (alive) { setCovers(c => ({ ...c, [n.id]: [] })); setDishes(d => ({ ...d, [n.id]: [] })); } });
     });
     return () => { alive = false; };
   }, [role, negocios]);
@@ -242,6 +283,13 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
   const low = (products || []).filter(p => typeof p.stock === 'number' && p.stock <= lowLimit);
   const visible = (negocios || []).filter(n => (category === 'Todo' || n.categoria === category) && (n.nombre || '').toLocaleLowerCase('es').includes(query.toLocaleLowerCase('es')));
 
+  // Platillos para el carrusel: se intercalan los locales (1.º de cada uno, luego 2.º…) para dar variedad
+  const carouselDishes = (() => {
+    const lists = (visible || []).map(n => dishes[n.id] || []);
+    const out = [];
+    for (let i = 0; i < 6 && out.length < 10; i++) lists.forEach(l => { if (l[i] && out.length < 10) out.push(l[i]); });
+    return out;
+  })();
   const photoOf = s => s.portada || covers[s.id]?.[0] || s.logo || '';
   const openStore = id => { setStoreId(id); setStoreModal(true); setNotice(''); };
 
@@ -368,6 +416,126 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
     />
   ) : null;
 
+  const bizTopBar = role === 'business' ? (
+    <BizTopBar
+      nav={navigation.map(([label, Icon]) => ({ label, Icon, badge: label === 'Pedidos' ? pending : 0 }))}
+      page={page}
+      onNav={go}
+      name={me.nombre || myNegocio?.nombre || 'Mi negocio'}
+      initials={(me.nombre || myNegocio?.nombre || 'Negocio').slice(0, 2).toUpperCase()}
+      open={open}
+      onToggleOpen={toggleOpen}
+      onLogout={onLogout}
+    />
+  ) : null;
+
+  // Resumen y Pedidos del negocio: diseño nuevo (fuera de #cerca-pro, igual que el panel del cliente)
+  if (role === 'business' && (page === 'Resumen' || page === 'Pedidos' || page === 'Mi negocio' || page === 'Productos')) {
+    return <>
+      {bizTopBar}
+      <div className="mv-root min-h-screen bg-gradient-to-br from-orange-50 via-brand-surface to-emerald-50 bg-fixed text-brand-charcoal">
+        <main className="mx-auto w-full max-w-[1400px] px-3 pb-16 pt-8 sm:px-4">
+          {notice && <div role="status" className="mb-6 rounded-2xl bg-brand-mintLight px-5 py-3 text-sm font-semibold text-emerald-800">{notice}</div>}
+          {page === 'Resumen' && (
+            <BizSummary
+              name={me.nombre || myNegocio?.nombre || 'equipo'}
+              open={open}
+              sales={completed.reduce((sum, o) => sum + o.subtotal, 0)}
+              doneCount={completed.length}
+              pendingCount={pending}
+              totalCount={orders.length}
+              active={orders.filter(o => o.estado >= 0 && o.estado < 3)}
+              products={products}
+              low={low}
+              auto={autoAccept}
+              total={autoTotal}
+              onGo={go}
+              onToggleOpen={toggleOpen}
+            />
+          )}
+          {page === 'Productos' && <>
+            <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">Tu menú, siempre listo.</h1>
+            <p className="mb-6 mt-1 text-sm text-gray-500">Agrega productos con foto, descripción, precio y opciones.</p>
+            {uid && <BusinessProducts negocioId={uid} items={products} onChange={setProducts} loadError={productsError} lowStock={lowLimit} />}
+          </>}
+          {page === 'Mi negocio' && (myNegocio ? <div className="space-y-6">
+            <div>
+              <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">Un local con identidad.</h1>
+              <p className="mt-1 text-sm text-gray-500">Así te encontrarán tus clientes.</p>
+            </div>
+            <div className="grid gap-5 lg:grid-cols-2">
+              <section className="rounded-[26px] border border-white/80 bg-white/85 p-6 shadow-[0_4px_20px_-2px_rgba(20,20,22,0.08)] backdrop-blur">
+                <span className={`inline-block rounded-lg px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wider ${open ? 'bg-brand-mintLight text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{open ? 'Abierto' : 'Pausado'}</span>
+                <h2 className="mt-3 font-display text-2xl font-extrabold">{myNegocio.nombre}</h2>
+                <p className="mt-1 text-sm text-gray-500">{myNegocio.categoria}{myNegocio.descripcion ? ` · ${myNegocio.descripcion}` : ''}</p>
+                <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-gray-600"><Bike aria-hidden="true" className="h-4 w-4 text-brand-coral" />Entrega a domicilio y recogida</p>
+                <button type="button" onClick={toggleOpen} className="mt-5 rounded-2xl border-2 border-gray-200 bg-white px-5 py-3 text-sm font-bold transition hover:border-brand-coral/50">{open ? 'Pausar nuevos pedidos' : 'Abrir negocio'}</button>
+              </section>
+              <section className="rounded-[26px] border border-white/80 bg-white/85 p-6 shadow-[0_4px_20px_-2px_rgba(20,20,22,0.08)] backdrop-blur">
+                <h2 className="font-display text-xl font-extrabold">Vista del cliente</h2>
+                <p className="mt-1 text-sm text-gray-500">Comprueba la presentación de tu menú.</p>
+                <button type="button" onClick={() => setPage('Escaparate')} className="mt-5 rounded-2xl bg-brand-coral px-5 py-3 text-sm font-bold text-white shadow-[0_12px_28px_-6px_rgba(255,90,54,0.45)] transition hover:bg-brand-coralDark">Ver escaparate</button>
+              </section>
+            </div>
+            <BusinessProfile uid={uid} negocio={myNegocio} />
+          </div> : <p className="text-sm text-gray-500">Cargando tu negocio…</p>)}
+          {page === 'Pedidos' && <>
+            <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">Centro de pedidos</h1>
+            <p className="mb-6 mt-1 text-sm text-gray-500">Cada pedido por estado, con su tiempo restante.</p>
+            <OrdersBoard
+              orders={orders}
+              autoPedidos={autoAccept}
+              autoTotal={autoTotal}
+              cloud={CLOUD_AUTOMATION}
+              onToggleTotal={toggleTotal}
+              prepBaseMin={myNegocio?.prepBaseMin}
+              autoFailed={autoFailed}
+              onToggleAuto={toggleAuto}
+              onSaveBase={saveBase}
+              onAccept={advance}
+              onExtend={(o, m) => extendOrder(o, m).then(() => setNotice(`Se agregaron ${m} minutos al pedido #${o.id.slice(0, 6).toUpperCase()}.`)).catch(fail)}
+              onFinishing={o => markFinishing(o.id).catch(() => {})}
+              onFinish={o => finishOrder(o.id).then(() => setNotice('Pedido confirmado como listo. El cliente ya puede verlo.')).catch(fail)}
+              onDeliver={advance}
+              onCancel={setToCancel}
+            />
+          </>}
+        </main>
+      </div>
+      <BizConfirm order={toCancel} onNo={() => setToCancel(null)} onYes={confirmCancel} />
+    </>;
+  }
+
+  // Mis pedidos del cliente: mismo diseño que Explorar
+  if (role === 'client' && page === 'Mi pedido') {
+    return <>
+      {topBar}
+      <div className="mv-root min-h-screen bg-gradient-to-br from-orange-50 via-brand-surface to-emerald-50 bg-fixed text-brand-charcoal">
+        <main className="mx-auto w-full max-w-[1800px] px-3 pb-16 pt-8 sm:px-4">
+          {notice && <div role="status" className="mb-6 rounded-2xl bg-brand-mintLight px-5 py-3 text-sm font-semibold text-emerald-800">{notice}</div>}
+          <ClientOrders orders={orders} onExplore={() => go('Explorar')} />
+        </main>
+        <p className="pb-8 text-center text-xs text-gray-400">KliparkLob · Tu tienda, más cerca de ti</p>
+      </div>
+      {cartDrawer}
+    </>;
+  }
+
+  // Mi perfil del cliente: mismo diseño que Explorar
+  if (role === 'client' && page === 'Mi perfil' && !guest) {
+    return <>
+      {topBar}
+      <div className="mv-root min-h-screen bg-gradient-to-br from-orange-50 via-brand-surface to-emerald-50 bg-fixed text-brand-charcoal">
+        <main className="mx-auto w-full max-w-[1200px] px-3 pb-16 pt-8 sm:px-4">
+          {notice && <div role="status" className="mb-6 rounded-2xl bg-brand-mintLight px-5 py-3 text-sm font-semibold text-emerald-800">{notice}</div>}
+          <ClientProfile uid={uid} me={me} orders={orders} onSaved={patch => setMe(previous => ({ ...previous, ...patch }))} onSeeOrders={() => go('Mi pedido')} />
+        </main>
+        <p className="pb-8 text-center text-xs text-gray-400">KliparkLob · Tu tienda, más cerca de ti</p>
+      </div>
+      {cartDrawer}
+    </>;
+  }
+
   // Pantalla Explorar del cliente: FUERA de #cerca-pro para que tu CSS viejo no la afecte
   if (role === 'client' && page === 'Explorar') {
     return <>
@@ -392,6 +560,7 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
             category={category}
             onCategory={setCategory}
             onOpen={openStore}
+            dishes={carouselDishes}
           />
         </main>
         <p className="pb-8 text-center text-xs text-gray-400">KliparkLob · Tu tienda, más cerca de ti</p>
@@ -419,43 +588,10 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
 
   return <>
   {topBar}
+  {bizTopBar}
   {cartDrawer}
-  <div id="cerca-pro" className={role === 'client' ? 'mv' : ''}>
+  <div id="cerca-pro" className="mv">
     <div className="app">
-      {role === 'business' && (
-      <aside className={`rail ${railOpen ? 'open' : ''}`} aria-label="Navegación principal">
-        <button type="button" className="rail-logo" onClick={() => setRailOpen(o => !o)} aria-expanded={railOpen} aria-label="Mostrar u ocultar menú">
-          <span className="rail-ico"><Store aria-hidden="true" /></span>
-          <span className="rail-txt"><b>KliparkLob</b><small>Tu tienda, más cerca</small></span>
-        </button>
-
-        <nav className="rail-nav">
-          {navigation.map(([label, Icon, hint]) => (
-            <button type="button" key={label} className="rail-item" aria-pressed={page === label} aria-label={label} title={label} onClick={() => go(label)}>
-              <span className="rail-ico"><Icon aria-hidden="true" />{label === 'Pedidos' && pending > 0 && <i className="rail-dot">{pending}</i>}</span>
-              <span className="rail-txt"><b>{label}</b><small>{hint}</small></span>
-            </button>
-          ))}
-        </nav>
-
-        <div className="rail-bottom">
-          {role === 'client' && (
-            <button type="button" className="rail-item cart" aria-pressed={page === 'Carrito'} aria-label="Carrito" title="Carrito" onClick={() => go('Carrito')}>
-              <span className="rail-ico"><ShoppingBag aria-hidden="true" />{quantity > 0 && <i className="rail-dot">{quantity}</i>}</span>
-              <span className="rail-txt"><b>Carrito</b><small>{quantity ? `${quantity} producto(s) · ${money(subtotal)}` : 'Aún vacío'}</small></span>
-            </button>
-          )}
-          <div className="rail-user">
-            <span className="avatar" aria-label={guest ? 'Invitado' : me.nombre || 'Tu cuenta'}>{guest ? 'IN' : (me.nombre || (role === 'client' ? 'Cliente' : 'Negocio')).slice(0, 2).toUpperCase()}</span>
-            <span className="rail-txt"><b>{guest ? 'Invitado' : me.nombre || (role === 'client' ? 'Cliente' : 'Negocio')}</b><small>{role === 'client' ? 'Cuenta de cliente' : 'Cuenta de negocio'}</small></span>
-          </div>
-          <button type="button" className="rail-item out" aria-label={guest ? 'Salir' : 'Cerrar sesión'} title={guest ? 'Salir' : 'Cerrar sesión'} onClick={onLogout}>
-            <span className="rail-ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></svg></span>
-            <span className="rail-txt"><b>{guest ? 'Salir' : 'Cerrar sesión'}</b><small>Hasta pronto</small></span>
-          </button>
-        </div>
-      </aside>
-      )}
 
       <div className="kl-main">
       <main>{guest && <div className="notice row"><span>Estás explorando como invitado.</span><Button secondary onClick={onRequestLogin}>Iniciar sesión para comprar</Button></div>}<div aria-live="polite">{notice && <div className="notice">{notice}</div>}</div>
@@ -505,6 +641,9 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
         <OrdersBoard
           orders={orders}
           autoPedidos={autoAccept}
+          autoTotal={autoTotal}
+          cloud={CLOUD_AUTOMATION}
+          onToggleTotal={toggleTotal}
           prepBaseMin={myNegocio?.prepBaseMin}
           autoFailed={autoFailed}
           onToggleAuto={toggleAuto}

@@ -1,5 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNow, fmtHour } from './OrdersBoard';
 import { Utensils, Coffee, CakeSlice, Grid2X2, Search, MapPin, ArrowRight, Bike, Store, ShoppingBag, User, Package } from './Icons';
+
+// Bloqueo del scroll con contador: varias ventanas abiertas a la vez no se pisan al cerrarse
+let scrollLocks = 0;
+function lockScroll() {
+  scrollLocks += 1;
+  document.body.style.overflow = 'hidden';
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    scrollLocks = Math.max(0, scrollLocks - 1);
+    if (scrollLocks === 0) document.body.style.overflow = '';
+  };
+}
 
 const money2 = v => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(v);
 const money = v => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(v);
@@ -96,15 +111,72 @@ export function StoreCard({ store, onOpen, highlight = false }) {
   );
 }
 
+/* ---------- Carrusel de platillos (se desliza solo) ---------- */
+function DishCarousel({ dishes, onOpen }) {
+  const [i, setI] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const n = dishes.length;
+  const idx = ((i % n) + n) % n;
+  useEffect(() => {
+    if (n < 2 || paused) return;
+    const t = setInterval(() => setI(v => v + 1), 4000);
+    return () => clearInterval(t);
+  }, [n, paused]);
+  const d = dishes[idx];
+
+  return (
+    <div
+      className="group relative min-h-[300px] overflow-hidden rounded-[28px] bg-brand-charcoal text-white shadow-[0_18px_40px_-14px_rgba(20,20,22,0.5)] lg:col-span-8"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
+      {dishes.map((x, k) => (
+        <img key={x.id} src={x.image} alt={x.name} className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${k === idx ? 'opacity-100' : 'opacity-0'}`} />
+      ))}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-black/25" />
+
+      <span className="absolute left-5 top-5 rounded-full border border-white/30 bg-black/30 px-3 py-1 text-xs font-bold backdrop-blur-md">🔥 Platillos destacados</span>
+
+      {/* Panel de cristal con el platillo actual */}
+      <div className="absolute inset-x-4 bottom-4 flex flex-wrap items-end justify-between gap-4 rounded-[22px] border border-white/35 bg-white/15 p-5 shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-xl sm:inset-x-5 sm:bottom-5">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-bold uppercase tracking-wider text-white/80">{d.storeName}{!d.open && ' · Cerrado'}</p>
+          <h1 className="mt-1 truncate font-display text-2xl font-extrabold leading-tight sm:text-4xl">{d.name}</h1>
+          {d.description && <p className="mt-1 line-clamp-1 text-sm text-white/85">{d.description}</p>}
+        </div>
+        <div className="flex shrink-0 items-center gap-4">
+          <span className="font-display text-2xl font-extrabold sm:text-3xl">{money2(d.price)}</span>
+          <button type="button" onClick={() => onOpen(d.storeId)} className="inline-flex items-center gap-2 rounded-2xl bg-brand-coral px-5 py-3 font-display text-sm font-bold text-white shadow-[0_12px_28px_-6px_rgba(255,90,54,0.6)] transition hover:bg-brand-coralDark active:scale-95">
+            Pedir ahora <ArrowRight aria-hidden="true" className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {n > 1 && (
+        <>
+          <button type="button" aria-label="Anterior" onClick={() => setI(idx - 1)} className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-black/30 text-xl backdrop-blur-md transition hover:bg-black/50 sm:opacity-0 sm:group-hover:opacity-100">‹</button>
+          <button type="button" aria-label="Siguiente" onClick={() => setI(idx + 1)} className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-black/30 text-xl backdrop-blur-md transition hover:bg-black/50 sm:opacity-0 sm:group-hover:opacity-100">›</button>
+          <div className="absolute right-5 top-6 flex gap-1.5">
+            {dishes.map((x, k) => (
+              <button key={x.id} type="button" aria-label={`Ir al platillo ${k + 1}`} onClick={() => setI(k)} className={`h-1.5 rounded-full transition-all ${k === idx ? 'w-7 bg-white' : 'w-3 bg-white/45'}`} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ---------- Banners ---------- */
-function Banners({ stores, onOpen, onCategory }) {
+function Banners({ stores, dishes = [], onOpen, onCategory }) {
   const hero = stores.find(s => s.image) || stores[0];
   const treat = stores.find(s => (s.categoryLabel === 'Postres' || s.categoryLabel === 'Bebidas') && s.image && s.id !== hero?.id)
     || stores.find(s => s.image && s.id !== hero?.id);
   const treatCategory = treat?.categoryLabel === 'Bebidas' || treat?.categoryLabel === 'Postres' ? treat.categoryLabel : 'Postres';
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      <div
+      {dishes.length > 0 && <DishCarousel dishes={dishes} onOpen={onOpen} />}
+      {dishes.length === 0 && <div
         onClick={() => hero && onOpen(hero.id)}
         className={`lg:col-span-8 relative overflow-hidden rounded-[28px] bg-gradient-to-r from-[#141416] via-[#232329] to-[#2E2522] text-white p-7 sm:p-9 flex flex-col justify-between min-h-[250px] group ${hero ? 'cursor-pointer' : ''}`}
       >
@@ -113,10 +185,10 @@ function Banners({ stores, onOpen, onCategory }) {
         <div className="relative z-10 max-w-lg space-y-3">
           <span className="inline-flex px-3 py-1 rounded-full bg-brand-coral/20 border border-brand-coral/40 text-brand-coral text-xs font-bold">🔥 Apoya el comercio local</span>
           <h1 className="font-display font-extrabold text-2xl sm:text-4xl tracking-tight leading-tight text-white">
-            Pide directo a los <span className="text-brand-coral">favoritos de tu barrio</span>
+            Pide directo a los <span className="text-brand-coral">negocios que te encantan</span>
           </h1>
           <p className="text-xs sm:text-sm text-gray-300 leading-relaxed max-w-md">
-            Cocinas independientes de tu comunidad, sin intermediarios. Paga en efectivo al recibir.
+            Cocinas y tiendas independientes, sin intermediarios. Paga en efectivo al recibir.
           </p>
         </div>
         {hero && (
@@ -127,7 +199,7 @@ function Banners({ stores, onOpen, onCategory }) {
             <span className="text-xs text-gray-400 font-medium">• 100% de tu compra va al local</span>
           </div>
         )}
-      </div>
+      </div>}
 
       <div
         onClick={() => onCategory(treatCategory)}
@@ -152,7 +224,7 @@ function Banners({ stores, onOpen, onCategory }) {
 }
 
 /* ---------- Pantalla Explorar completa ---------- */
-export function MarketHome({ stores: allStores, loading, greeting, address, query, onQuery, category, onCategory, onOpen, showSearch = true }) {
+export function MarketHome({ stores: allStores, loading, greeting, address, query, onQuery, category, onCategory, onOpen, showSearch = true, dishes = [] }) {
   const [onlyOpen, setOnlyOpen] = useState(false);
   const stores = onlyOpen ? allStores.filter(s => s.open) : allStores;
   const filtering = category !== 'Todo' || query.trim() !== '' || onlyOpen;
@@ -180,7 +252,7 @@ export function MarketHome({ stores: allStores, loading, greeting, address, quer
         </label>}
       </div>
 
-      {!filtering && <Banners stores={allStores} onOpen={onOpen} onCategory={onCategory} />}
+      {!filtering && <Banners stores={allStores} dishes={dishes} onOpen={onOpen} onCategory={onCategory} />}
 
       <CategoryBar category={category} onCategory={onCategory} onlyOpen={onlyOpen} onToggleOpen={() => setOnlyOpen(o => !o)} />
 
@@ -189,7 +261,7 @@ export function MarketHome({ stores: allStores, loading, greeting, address, quer
       {!filtering && featured.length > 0 && (
         <section className="space-y-4">
           <div className="flex items-center gap-2">
-            <h2 className="font-display font-extrabold text-2xl tracking-tight text-brand-charcoal">Favoritos del Barrio</h2>
+            <h2 className="font-display font-extrabold text-2xl tracking-tight text-brand-charcoal">Favoritos locales</h2>
             <span className="px-2.5 py-0.5 rounded-full bg-brand-coralLight text-brand-coral text-xs font-extrabold">Top locales</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
@@ -231,7 +303,7 @@ export function MarketHome({ stores: allStores, loading, greeting, address, quer
 export function TopBar({ address, query, onQuery, onHome, onAddress, onOrders, onProfile, onCart, onLogout, activeOrders = 0, cartCount = 0, initials = 'CL', name = '', guest = false }) {
   return (
     <header className="mv-root sticky top-0 z-40 px-3 pt-3 sm:px-4">
-      <div className="mx-auto w-full max-w-[1800px] rounded-[28px] border border-white/70 bg-orange-100/80 shadow-[0_8px_32px_rgba(20,20,22,0.12),inset_0_1px_0_rgba(255,255,255,0.8)] backdrop-blur-2xl backdrop-saturate-150">
+      <div className="mx-auto w-full max-w-[1800px] rounded-[28px] border border-white/70 bg-white/55 shadow-[0_8px_32px_rgba(20,20,22,0.12),inset_0_1px_0_rgba(255,255,255,0.8)] backdrop-blur-2xl backdrop-saturate-150">
       <div className="h-20 px-4 sm:px-6 flex items-center justify-between gap-4">
         <div className="flex items-center gap-6 shrink-0">
           <button type="button" onClick={onHome} className="flex items-center gap-2.5 group text-left">
@@ -240,7 +312,7 @@ export function TopBar({ address, query, onQuery, onHome, onAddress, onOrders, o
             </span>
             <span className="flex flex-col">
               <span className="font-display font-extrabold text-xl tracking-tight leading-none text-brand-charcoal">Klipark<span className="text-brand-coral">Lob</span></span>
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mt-0.5">Comida de barrio</span>
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mt-0.5">Comida local</span>
             </span>
           </button>
 
@@ -328,9 +400,8 @@ export function StoreModal({ store, products, loading, cartItems = [], cartCount
   useEffect(() => {
     const onKey = e => { if (e.key === 'Escape') closeRef.current(); };
     document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+    const unlock = lockScroll();
+    return () => { document.removeEventListener('keydown', onKey); unlock(); };
   }, []);
 
   const Icon = store.Icon || Store;
@@ -655,11 +726,10 @@ export function ProductOptionsModal({ product, onClose, onConfirm }) {
 export function CartDrawer({ open, cart, subtotal = 0, fee = 0, total = 0, pickup = false, onPickup, freeFrom = 0, sending = false, guest = false, address = '', notice = '', onChange, onClear, onConfirm, onClose, onLogin, onAddAddress }) {
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const unlock = lockScroll();
     const onKey = e => { if (e.key === 'Escape') onClose?.(); };
     window.addEventListener('keydown', onKey);
-    return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
+    return () => { unlock(); window.removeEventListener('keydown', onKey); };
   }, [open]);
 
   const items = cart?.items || [];
@@ -705,7 +775,7 @@ export function CartDrawer({ open, cart, subtotal = 0, fee = 0, total = 0, picku
             <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
               <span className="flex h-20 w-20 items-center justify-center rounded-full bg-gray-100 text-gray-400"><ShoppingBag className="h-9 w-9" /></span>
               <p className="font-display text-lg font-extrabold text-brand-charcoal">Tu carrito está vacío</p>
-              <p className="max-w-[16rem] text-sm text-gray-500">Explora los locales de tu barrio y agrega lo que se te antoje.</p>
+              <p className="max-w-[16rem] text-sm text-gray-500">Explora los negocios locales y agrega lo que se te antoje.</p>
               <button type="button" onClick={onClose} className="mt-2 rounded-2xl bg-brand-coral px-6 py-3 text-sm font-bold text-white transition hover:bg-brand-coralDark">Explorar locales</button>
             </div>
           ) : (
@@ -784,6 +854,118 @@ export function CartDrawer({ open, cart, subtotal = 0, fee = 0, total = 0, picku
           </div>
         )}
       </aside>
+    </div>
+  );
+}
+
+
+/* ---------- Mis pedidos del cliente (seguimiento por pasos) ---------- */
+const ORDER_BADGE = [
+  ['Esperando aceptación', 'bg-amber-100 text-amber-800'],
+  ['En preparación', 'bg-orange-100 text-orange-700'],
+  ['Listo', 'bg-brand-mintLight text-emerald-700'],
+  ['Entregado', 'bg-gray-100 text-gray-600'],
+  ['Cancelado', 'bg-red-100 text-red-700'],
+];
+
+function OrderTracker({ order }) {
+  const now = useNow();
+  const steps = ['Pedido recibido', 'En preparación', 'Listo', order.recoger ? 'Recogido' : 'Entregado'];
+  const e = order.estado;
+  const left = order.listoMs ? order.listoMs - now : null;
+  const [badge, badgeCls] = ORDER_BADGE[e] || ORDER_BADGE[0];
+
+  return (
+    <article className="rounded-[26px] border border-white/80 bg-white/85 p-6 shadow-[0_4px_20px_-2px_rgba(20,20,22,0.08)] backdrop-blur">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-display text-xl font-extrabold text-brand-charcoal">Pedido #{order.id.slice(0, 6).toUpperCase()}</h3>
+          <p className="mt-0.5 truncate text-sm text-gray-500">{order.negocioNombre} · {order.recoger ? 'Recoger en local' : 'Entrega a domicilio'}</p>
+        </div>
+        <span className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-extrabold ${badgeCls}`}>{badge}</span>
+      </div>
+
+      {/* Aviso principal según el estado real */}
+      {e === 0 && order.prepMinEst > 0 && <p className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">⏱ Tiempo estimado: ~{order.prepMinEst} min desde que el negocio acepte.</p>}
+      {e === 1 && order.listoMs && (
+        <div className="mt-4 rounded-2xl bg-brand-coralLight px-4 py-3">
+          {left > 0
+            ? <p className="text-sm font-semibold text-brand-coralDark">⏱ Listo en aprox. <b className="text-base">{Math.ceil(left / 60000)} min</b> · ≈ {fmtHour(order.listoMs)}{order.retrasoMin > 0 ? ' · el negocio informó un pequeño retraso' : ''}</p>
+            : <p className="text-sm font-semibold text-brand-coralDark">Ya casi: el negocio está terminando tu pedido.</p>}
+        </div>
+      )}
+      {e === 2 && <p className="mt-4 rounded-2xl bg-brand-mintLight px-4 py-3 text-sm font-bold text-emerald-800">🎉 ¡Tu pedido está listo! {order.recoger ? 'Pasa a recogerlo.' : 'Va en camino.'}</p>}
+      {e === 4 && <p className="mt-4 rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">Este pedido fue cancelado{order.motivo ? `: ${order.motivo}` : '.'}</p>}
+
+      {/* Línea de pasos */}
+      {e !== 4 && (
+        <ol className="mt-6 grid grid-cols-4 gap-1">
+          {steps.map((label, i) => {
+            const done = i <= e;
+            const current = i === e && e < 3;
+            return (
+              <li key={label} className="relative flex flex-col items-center text-center">
+                {i > 0 && <span className={`absolute right-1/2 top-[15px] h-1 w-full -translate-y-1/2 rounded-full ${i <= e ? 'bg-brand-coral' : 'bg-gray-200'}`} />}
+                <span className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-extrabold transition ${done ? 'border-brand-coral bg-brand-coral text-white' : 'border-gray-300 bg-white text-gray-400'} ${current ? 'ring-4 ring-brand-coral/25' : ''}`}>{done ? '✓' : i + 1}</span>
+                <span className={`mt-2 text-[11px] font-bold leading-tight ${done ? 'text-brand-charcoal' : 'text-gray-400'}`}>{label}</span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+
+      {/* Productos */}
+      <ul className="mt-6 divide-y divide-gray-100 border-t border-gray-100">
+        {order.items.map((it, i) => (
+          <li key={(it.key || it.id) + i} className="flex items-start justify-between gap-4 py-3 text-sm">
+            <span className="min-w-0">
+              <b className="font-semibold text-brand-charcoal">{it.quantity} × {it.name}</b>
+              {it.detalle?.length > 0 && <span className="mt-0.5 block text-xs text-gray-500">{it.detalle.join(' · ')}</span>}
+              {it.nota && <span className="mt-0.5 block text-xs italic text-gray-400">“{it.nota}”</span>}
+            </span>
+            <b className="shrink-0 text-brand-charcoal">{money2(it.price * it.quantity)}</b>
+          </li>
+        ))}
+      </ul>
+      <div className="space-y-1 border-t border-gray-100 pt-3 text-sm text-gray-500">
+        {typeof order.envio === 'number' && <div className="flex justify-between"><span>Envío</span><b className="text-brand-charcoal">{order.envio === 0 ? 'Gratis' : money2(order.envio)}</b></div>}
+        <div className="flex items-end justify-between"><span className="font-display font-extrabold text-brand-charcoal">Total</span><span className="font-display text-2xl font-extrabold text-brand-charcoal">{money2(order.total)}</span></div>
+      </div>
+    </article>
+  );
+}
+
+export function ClientOrders({ orders, onExplore }) {
+  // por si quedó el scroll bloqueado por una ventana anterior
+  useEffect(() => { if (scrollLocks === 0) document.body.style.overflow = ''; }, []);
+  const active = orders.filter(o => o.estado < 3);
+  const past = orders.filter(o => o.estado >= 3);
+  return (
+    <div>
+      <h1 className="font-display text-3xl font-extrabold tracking-tight text-brand-charcoal sm:text-4xl">Mis pedidos</h1>
+      <p className="mb-8 mt-1 text-sm text-gray-500">Cada paso, claro y a la vista.</p>
+
+      {orders.length === 0 && (
+        <div className="mx-auto flex max-w-md flex-col items-center gap-3 rounded-[28px] border border-dashed border-gray-300 bg-white/70 px-6 py-14 text-center backdrop-blur">
+          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-coralLight text-brand-coral"><Package aria-hidden="true" className="h-8 w-8" /></span>
+          <h2 className="font-display text-xl font-extrabold text-brand-charcoal">Tu primer pedido te espera</h2>
+          <p className="text-sm text-gray-500">Explora los negocios locales y pide lo que se te antoje.</p>
+          <button type="button" onClick={onExplore} className="mt-2 rounded-2xl bg-brand-coral px-6 py-3 text-sm font-bold text-white shadow-[0_12px_28px_-6px_rgba(255,90,54,0.45)] transition hover:bg-brand-coralDark">Explorar negocios</button>
+        </div>
+      )}
+
+      {active.length > 0 && (
+        <section className="mb-10">
+          <h2 className="mb-4 font-display text-lg font-extrabold text-brand-charcoal">En curso ({active.length})</h2>
+          <div className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">{active.map(o => <OrderTracker key={o.id} order={o} />)}</div>
+        </section>
+      )}
+      {past.length > 0 && (
+        <section>
+          <h2 className="mb-4 font-display text-lg font-extrabold text-brand-charcoal">Anteriores</h2>
+          <div className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">{past.map(o => <OrderTracker key={o.id} order={o} />)}</div>
+        </section>
+      )}
     </div>
   );
 }

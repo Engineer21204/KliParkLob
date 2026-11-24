@@ -32,7 +32,7 @@ export function watchOrders(field, uid, onData, onError) {
   return onSnapshot(query(collection(db, "pedidos"), where(field, "==", uid)), (snap) =>
     onData(snap.docs.map((d) => {
       const data = d.data({ serverTimestamps: "estimate" });
-      return { id: d.id, ...data, creado: data.creadoEn?.toMillis?.() ?? Date.now(), listoMs: data.listoEn?.toMillis?.() ?? null };
+      return { id: d.id, ...data, creado: data.creadoEn?.toMillis?.() ?? Date.now(), listoMs: data.listoEn?.toMillis?.() ?? null, listoRealMs: data.listoReal?.toMillis?.() ?? null };
     }).sort((a, b) => b.creado - a.creado)), onError);
 }
 
