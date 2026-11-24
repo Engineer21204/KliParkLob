@@ -792,7 +792,7 @@ export function CartDrawer({ open, cart, subtotal = 0, fee = 0, total = 0, picku
               {/* Forma de entrega */}
               <h3 className="mb-3 mt-7 font-display text-sm font-extrabold uppercase tracking-wide text-gray-500">Forma de entrega</h3>
               <div className="grid grid-cols-2 gap-3">
-                {[[false, 'A domicilio', Bike], [true, 'Recoger', Store]].map(([value, label, Ico]) => (
+                {[[false, 'A domicilio', Bike], [true, 'Recoger en Local', Store]].map(([value, label, Ico]) => (
                   <button key={label} type="button" aria-pressed={pickup === value} onClick={() => onPickup(value)}
                     className={`flex items-center justify-center gap-2 rounded-2xl border-2 px-4 py-3 text-sm font-bold transition ${pickup === value ? 'border-brand-coral bg-brand-coralLight text-brand-coral' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
                     <Ico className="h-4 w-4" />{label}
