@@ -1,9 +1,5 @@
 import React from 'react';
 
-/* Editor de opciones de un producto (para el negocio).
-   Uso:  <ProductOptionsEditor value={opciones} onChange={setOpciones} />
-   Al guardar el producto usa:  opciones: cleanOptions(opciones)  */
-
 const uid = () => Math.random().toString(36).slice(2, 8);
 
 export const OPTION_TEMPLATES = [
@@ -13,7 +9,6 @@ export const OPTION_TEMPLATES = [
   { titulo: 'Opciones', tipo: 'una', obligatorio: false, quitar: false, items: [{ nombre: 'Opción 1', extra: 0 }] },
 ];
 
-/* Limpia antes de guardar en Firestore (sin undefined, sin vacíos) */
 export function cleanOptions(list) {
   return (list || [])
     .map(g => ({

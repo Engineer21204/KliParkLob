@@ -16,16 +16,14 @@ import { ensureNegocio } from "./marketService";
 
 const userRef = (uid) => doc(db, "users", uid);
 
-/** Lee el perfil guardado en Firestore (users/{uid}). Devuelve null si no existe. */
 export async function getProfile(uid) {
   const snap = await getDoc(userRef(uid));
   if (!snap.exists()) return null;
   const { creadoEn, ...data } = snap.data();
-  if (data.rol === "negocio") ensureNegocio(uid, data).catch(() => {}); // perfil público (también para cuentas anteriores)
+  if (data.rol === "negocio") ensureNegocio(uid, data).catch(() => {}); 
   return { uid, ...data };
 }
 
-/** Guarda los datos editables del perfil del usuario (users/{uid}). */
 export async function saveProfile(uid, { nombre, cel, direccion }) {
   const patch = { nombre: nombre.trim(), cel: cel || "", direccion: (direccion || "").trim().slice(0, 200) };
   await updateDoc(userRef(uid), patch);
@@ -33,13 +31,12 @@ export async function saveProfile(uid, { nombre, cel, direccion }) {
   return patch;
 }
 
-/** Crea la cuenta en Authentication y su perfil (con el rol) en Firestore. */
 export async function registerUser({ role, nombre, email, cel, categoria, pass }) {
   const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
   try {
     await updateProfile(cred.user, { displayName: nombre.trim() });
     const data = {
-      rol: role, // "cliente" | "negocio"
+      rol: role, 
       nombre: nombre.trim(),
       email: email.trim(),
       cel,
@@ -49,16 +46,15 @@ export async function registerUser({ role, nombre, email, cel, categoria, pass }
     if (role === "negocio") data.categoria = categoria;
     await setDoc(userRef(cred.user.uid), data);
     if (role === "negocio") await ensureNegocio(cred.user.uid, data).catch(() => {});
-    sendEmailVerification(cred.user).catch(() => {}); // si falla, no bloquea el registro
+    sendEmailVerification(cred.user).catch(() => {}); 
     const { creadoEn, ...profile } = data;
     return { uid: cred.user.uid, ...profile };
   } catch (e) {
-    await cred.user.delete().catch(() => {}); // evita cuentas sin perfil
+    await cred.user.delete().catch(() => {}); 
     throw e;
   }
 }
 
-/** Inicia sesión y comprueba que la cuenta sea del tipo elegido (cliente o negocio). */
 export async function loginUser(email, pass, expectedRole) {
   const cred = await signInWithEmailAndPassword(auth, email.trim(), pass);
   const profile = await getProfile(cred.user.uid);
@@ -73,9 +69,6 @@ export async function loginUser(email, pass, expectedRole) {
   return profile;
 }
 
-/* ---------- Google y teléfono ---------- */
-
-/** Revisa el perfil de una cuenta que entró con Google o teléfono. Si no tiene, pide completarlo. */
 async function resolveSocial(user, expectedRole) {
   const profile = await getProfile(user.uid);
   if (!profile) {
@@ -98,7 +91,6 @@ export async function loginWithGoogle(expectedRole) {
 let phoneVerifier = null;
 const clearVerifier = () => { try { phoneVerifier?.clear(); } catch { /* ya limpio */ } phoneVerifier = null; };
 
-/** Envía el código SMS. `cel10` = 10 dígitos (México, +52). Devuelve la confirmación para validar el código. */
 export async function sendPhoneCode(cel10, containerId = "recaptcha-container") {
   clearVerifier();
   phoneVerifier = new RecaptchaVerifier(auth, containerId, { size: "invisible" });
@@ -115,7 +107,6 @@ export async function confirmPhoneCode(confirmation, code, expectedRole) {
   return resolveSocial(cred.user, expectedRole);
 }
 
-/** Crea el perfil (users/{uid}) de una cuenta que entró con Google o teléfono. */
 export async function completeProfile({ role, nombre, categoria, cel }) {
   const user = auth.currentUser;
   if (!user) throw { code: "app/no-profile" };
@@ -138,7 +129,6 @@ export async function completeProfile({ role, nombre, categoria, cel }) {
 export const resetPassword = (email) => sendPasswordResetEmail(auth, email.trim());
 export const logout = () => signOut(auth);
 
-/** Traduce los errores de Firebase a mensajes para el usuario. */
 export function friendlyError(e) {
   switch (e?.code) {
     case "auth/invalid-credential":

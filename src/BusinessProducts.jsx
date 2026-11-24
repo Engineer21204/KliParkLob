@@ -4,19 +4,18 @@ import { createProduct, updateProduct, removeProduct, compressImage, friendlyPro
 
 const CATEGORIAS = ["Comida", "Bebidas", "Postres"];
 const money = (n) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
-const LOW_STOCK = 5; // aviso de pocas unidades
+const LOW_STOCK = 5; 
 const EMPTY = { name: "", price: "", description: "", categoria: "", imagen: "", stock: "", prepMin: "" };
 const stockLabel = (p, limit = LOW_STOCK) => typeof p.stock !== "number" ? "Sin control de existencias" : p.stock === 0 ? "Agotado" : p.stock <= limit ? `⚠ Pocas unidades: ${p.stock}` : `Existencias: ${p.stock}`;
 
-/** Catálogo del negocio: lista, alta, edición y borrado de productos (con foto y descripción). */
 export default function BusinessProducts({ negocioId, items, onChange, loadError, lowStock = LOW_STOCK }) {
   const [form, setForm] = useState(EMPTY);
   const [opciones, setOpciones] = useState([]);
   const [editing, setEditing] = useState(null);
   const [msg, setMsg] = useState(loadError || "");
   const [busy, setBusy] = useState(false);
-  const [toDelete, setToDelete] = useState(null); // producto pendiente de confirmar
-  const [fileKey, setFileKey] = useState(0); // para limpiar el selector de archivo
+  const [toDelete, setToDelete] = useState(null); 
+  const [fileKey, setFileKey] = useState(0); 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   async function pickImage(e) {

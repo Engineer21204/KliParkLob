@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { deleteField } from "firebase/firestore";
-import { updateNegocio, friendlyMarketError } from "./MarketService";
+import { updateNegocio, friendlyMarketError } from "./marketService";
 import { compressImage } from "./productService";
 
 const CATEGORIAS = [
@@ -17,7 +17,6 @@ const DIAS = [
   { id: "domingo", nombre: "Dom" }
 ];
 
-// Crea un horario inicial sin días habilitados.
 function horarioInicial(horario) {
   return Object.fromEntries(
     DIAS.map(({ id }) => {
@@ -37,7 +36,6 @@ function horarioInicial(horario) {
   );
 }
 
-/** Formulario para editar el perfil público del negocio. */
 export default function BusinessProfile({ uid, negocio }) {
   const [form, setForm] = useState({
     nombre: negocio.nombre || "",
@@ -59,7 +57,7 @@ export default function BusinessProfile({ uid, negocio }) {
       [k]: e.target.value
     }));
 
-  // Cambiar si un día tiene servicio o no.
+
   function toggleDia(id) {
     setForm((previous) => ({
       ...previous,
@@ -73,7 +71,7 @@ export default function BusinessProfile({ uid, negocio }) {
     }));
   }
 
-  // Modificar la apertura o el cierre de un día.
+
   function cambiarHora(id, campo, valor) {
     setForm((previous) => ({
       ...previous,
@@ -130,7 +128,6 @@ export default function BusinessProfile({ uid, negocio }) {
       );
     }
 
-    // Comprobar que los días habilitados tengan un horario válido.
     for (const dia of DIAS) {
       const horarioDia = form.horario[dia.id];
 

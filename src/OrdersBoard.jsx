@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-
-/* Reloj que se actualiza cada segundo (para las cuentas regresivas) */
 export function useNow(ms = 1000) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), ms); return () => clearInterval(t); }, [ms]);
@@ -53,12 +51,6 @@ function Head({ order, badge, badgeBg }) {
   );
 }
 
-/**
- * Panel de pedidos del negocio, organizado por estado.
- * Props: orders, autoPedidos, prepBaseMin, onToggleAuto, onSaveBase,
- *        onAccept(order) [manual], onExtend(order,min), onFinishing(order), onFinish(order), onDeliver(order), onCancel(order),
- *        autoFailed (ids que no se aceptaron solos), notice
- */
 export default function OrdersBoard({ orders, autoPedidos, autoTotal = false, cloud = false, onToggleTotal, prepBaseMin, onToggleAuto, onSaveBase, onAccept, onExtend, onFinishing, onFinish, onDeliver, onCancel, autoFailed = [] }) {
   const now = useNow();
   const [base, setBase] = useState(String(prepBaseMin || 15));
@@ -71,7 +63,6 @@ export default function OrdersBoard({ orders, autoPedidos, autoTotal = false, cl
   const ready = orders.filter((o) => o.estado === 2);
   const hist = orders.filter((o) => o.estado >= 3).slice(0, 10);
 
-  // Paso 9: cuando se cumple el tiempo, avisar al negocio ("programado para finalizar")
   useEffect(() => {
     prep.forEach((o) => {
       if (!autoTotal && !cloud && o.listoMs && o.listoMs <= now && !o.porFinalizar && !asked.current.has(o.id)) {

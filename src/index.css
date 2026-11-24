@@ -15,7 +15,6 @@
   --font-display: 'Maven Pro', sans-serif;
 }
 
-/* Reinicio de estilos SOLO para la vista del cliente (como el "preflight" de Tailwind) */
 @layer base {
   .mv-root, .mv-root *, .mv-root ::before, .mv-root ::after {
     box-sizing: border-box;

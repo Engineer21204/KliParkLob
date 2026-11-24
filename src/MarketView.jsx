@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNow, fmtHour } from './OrdersBoard';
 import { Utensils, Coffee, CakeSlice, Grid2X2, Search, MapPin, ArrowRight, Bike, Store, ShoppingBag, User, Package } from './Icons';
 
-// Bloqueo del scroll con contador: varias ventanas abiertas a la vez no se pisan al cerrarse
 let scrollLocks = 0;
 function lockScroll() {
   scrollLocks += 1;
@@ -28,7 +27,6 @@ const CATEGORIES = [
   ['Postres', CakeSlice],
 ];
 
-/* ---------- Barra de categorías ---------- */
 export function CategoryBar({ category, onCategory, onlyOpen = false, onToggleOpen }) {
   return (
     <div className="bg-white p-3 rounded-[24px] border border-gray-200 shadow-[0_4px_20px_-2px_rgba(20,20,22,0.06)] flex items-center justify-between gap-3">
@@ -67,7 +65,6 @@ export function CategoryBar({ category, onCategory, onlyOpen = false, onToggleOp
   );
 }
 
-/* ---------- Tarjeta de local ---------- */
 export function StoreCard({ store, onOpen, highlight = false }) {
   const Icon = store.Icon || Store;
   const glass = 'backdrop-blur-md border border-white/30';
@@ -111,7 +108,6 @@ export function StoreCard({ store, onOpen, highlight = false }) {
   );
 }
 
-/* ---------- Carrusel de platillos (se desliza solo) ---------- */
 function DishCarousel({ dishes, onOpen }) {
   const [i, setI] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -119,7 +115,7 @@ function DishCarousel({ dishes, onOpen }) {
   const idx = ((i % n) + n) % n;
   useEffect(() => {
     if (n < 2 || paused) return;
-    const t = setInterval(() => setI(v => v + 1), 4000);
+    const t = setInterval(() => setI(v => v + 1), 3000);
     return () => clearInterval(t);
   }, [n, paused]);
   const d = dishes[idx];
@@ -167,7 +163,6 @@ function DishCarousel({ dishes, onOpen }) {
   );
 }
 
-/* ---------- Banners ---------- */
 function Banners({ stores, dishes = [], onOpen, onCategory }) {
   const hero = stores.find(s => s.image) || stores[0];
   const treat = stores.find(s => (s.categoryLabel === 'Postres' || s.categoryLabel === 'Bebidas') && s.image && s.id !== hero?.id)
@@ -223,7 +218,6 @@ function Banners({ stores, dishes = [], onOpen, onCategory }) {
   );
 }
 
-/* ---------- Pantalla Explorar completa ---------- */
 export function MarketHome({ stores: allStores, loading, greeting, address, query, onQuery, category, onCategory, onOpen, showSearch = true, dishes = [] }) {
   const [onlyOpen, setOnlyOpen] = useState(false);
   const stores = onlyOpen ? allStores.filter(s => s.open) : allStores;
@@ -298,8 +292,6 @@ export function MarketHome({ stores: allStores, loading, greeting, address, quer
   );
 }
 
-
-/* ---------- Barra superior estilo MesaLocal ---------- */
 export function TopBar({ address, query, onQuery, onHome, onAddress, onOrders, onProfile, onCart, onLogout, activeOrders = 0, cartCount = 0, initials = 'CL', name = '', guest = false }) {
   return (
     <header className="mv-root sticky top-0 z-40 px-3 pt-3 sm:px-4">
@@ -381,8 +373,6 @@ export function TopBar({ address, query, onQuery, onHome, onAddress, onOrders, o
   );
 }
 
-
-/* ---------- Ventana grande con el menú del local (estilo MesaLocal) ---------- */
 export function StoreModal({ store, products, loading, cartItems = [], cartCount = 0, cartTotal = 0, canOrder = true, notice = '', onAdd, onChange, onClose, onCart }) {
   const [section, setSection] = useState('Todos');
   const [slide, setSlide] = useState(0);
@@ -623,8 +613,6 @@ export function StoreModal({ store, products, loading, cartItems = [], cartCount
   );
 }
 
-
-/* ---------- Ventana para personalizar un producto (ingredientes, extras, tamaño…) ---------- */
 export function ProductOptionsModal({ product, onClose, onConfirm }) {
   const groups = (product.opciones || []).filter(g => g?.items?.length);
   const [sel, setSel] = useState(() => {
@@ -721,8 +709,6 @@ export function ProductOptionsModal({ product, onClose, onConfirm }) {
   );
 }
 
-
-/* ---------- Carrito lateral (panel que entra desde la derecha) ---------- */
 export function CartDrawer({ open, cart, subtotal = 0, fee = 0, total = 0, pickup = false, onPickup, freeFrom = 0, sending = false, guest = false, address = '', notice = '', onChange, onClear, onConfirm, onClose, onLogin, onAddAddress }) {
   useEffect(() => {
     if (!open) return;
@@ -858,8 +844,6 @@ export function CartDrawer({ open, cart, subtotal = 0, fee = 0, total = 0, picku
   );
 }
 
-
-/* ---------- Mis pedidos del cliente (seguimiento por pasos) ---------- */
 const ORDER_BADGE = [
   ['Esperando aceptación', 'bg-amber-100 text-amber-800'],
   ['En preparación', 'bg-orange-100 text-orange-700'],
@@ -936,7 +920,6 @@ function OrderTracker({ order }) {
 }
 
 export function ClientOrders({ orders, onExplore }) {
-  // por si quedó el scroll bloqueado por una ventana anterior
   useEffect(() => { if (scrollLocks === 0) document.body.style.overflow = ''; }, []);
   const active = orders.filter(o => o.estado < 3);
   const past = orders.filter(o => o.estado >= 3);

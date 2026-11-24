@@ -5,7 +5,6 @@ const money = v => new Intl.NumberFormat('es-MX', { style: 'currency', currency:
 const fmtHour = ms => new Date(ms).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true });
 const STATUS = ['Esperando', 'En preparación', 'Listo', 'Entregado', 'Cancelado'];
 
-/* Barra superior de cristal del negocio (mismo estilo que la del cliente) */
 export function BizTopBar({ nav, page, onNav, name, initials, open, onToggleOpen, onLogout }) {
   return (
     <header className="mv-root sticky top-0 z-40 px-3 pt-3 sm:px-4">
@@ -65,7 +64,6 @@ const Panel = ({ children, className = '' }) => (
   <section className={`rounded-[24px] border border-white/80 bg-white/80 p-6 shadow-[0_4px_20px_-2px_rgba(20,20,22,0.08)] backdrop-blur ${className}`}>{children}</section>
 );
 
-/* Pantalla Resumen */
 export function BizSummary({ name, open, sales, doneCount, pendingCount, totalCount, active, products, low, auto, total, onGo, onToggleOpen }) {
   const hour = new Date().getHours();
   const hello = hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas noches';
@@ -142,7 +140,6 @@ export function BizSummary({ name, open, sales, doneCount, pendingCount, totalCo
   );
 }
 
-/* Ventana de confirmación (cancelar pedido) */
 export function BizConfirm({ order, onNo, onYes }) {
   if (!order) return null;
   return (

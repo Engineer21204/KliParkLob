@@ -21,7 +21,6 @@ function Stat({ icon, label, value, hint }) {
   );
 }
 
-/** Perfil del cliente: datos personales, dirección de entrega y resumen de actividad. */
 export default function ClientProfile({ uid, me, orders, onSaved, onSeeOrders }) {
   const [form, setForm] = useState({ nombre: me.nombre || "", cel: me.cel || "", direccion: me.direccion || "" });
   const [msg, setMsg] = useState({ text: "", ok: false });

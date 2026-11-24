@@ -5,15 +5,14 @@ import {
 import { db } from "./firebase";
 
 const col = collection(db, "products");
-const MAX_CHARS = 600000; // tope de la imagen ya comprimida (Firestore limita cada documento a 1 MB)
+const MAX_CHARS = 600000; 
 
-/** Productos de un negocio. */
 export async function listProducts(negocioId) {
   const snap = await getDocs(query(col, where("negocioId", "==", negocioId)));
   return snap.docs
     .map((d) => {
       const { creadoEn, ...data } = d.data();
-      return { id: d.id, ...data }; // incluye `opciones` si el producto las tiene
+      return { id: d.id, ...data }; 
     })
     .sort((a, b) => a.name.localeCompare(b.name, "es"));
 }
@@ -23,11 +22,11 @@ const clean = ({ name, price, description, categoria, imagen, available, stock, 
   price: Number(price),
   description: description.trim(),
   categoria: categoria || "",
-  stock: Math.max(0, Math.floor(Number(stock) || 0)), // existencias (unidades)
+  stock: Math.max(0, Math.floor(Number(stock) || 0)), 
   available: available ?? true,
   ...(imagen ? { imagen } : {}),
-  ...(Number(prepMin) > 0 ? { prepMin: Math.round(Number(prepMin)) } : {}), // minutos de preparación
-  ...(opciones?.length ? { opciones } : {}), // grupos de opciones (tamaño, extras, quitar ingredientes…)
+  ...(Number(prepMin) > 0 ? { prepMin: Math.round(Number(prepMin)) } : {}),
+  ...(opciones?.length ? { opciones } : {}), 
 });
 
 export async function createProduct(negocioId, data) {
@@ -38,15 +37,14 @@ export async function createProduct(negocioId, data) {
 
 export async function updateProduct(id, patch) {
   const data = { ...patch };
-  if ("imagen" in data && !data.imagen) data.imagen = deleteField(); // quitar la foto
-  if ("opciones" in data && !data.opciones?.length) data.opciones = deleteField(); // quitar las opciones
+  if ("imagen" in data && !data.imagen) data.imagen = deleteField(); 
+  if ("opciones" in data && !data.opciones?.length) data.opciones = deleteField(); 
   if ("prepMin" in data && !(Number(data.prepMin) > 0)) data.prepMin = deleteField();
   await updateDoc(doc(db, "products", id), data);
 }
 
 export const removeProduct = (id) => deleteDoc(doc(db, "products", id));
 
-/** Reduce la foto (máx. 800 px, JPEG) y la devuelve como texto para guardarla en Firestore. */
 export function compressImage(file, max = 800, quality = 0.72) {
   return new Promise((resolve, reject) => {
     if (!file.type.startsWith("image/")) return reject(new Error("Elige un archivo de imagen (JPG, PNG o WebP)."));
@@ -60,7 +58,7 @@ export function compressImage(file, max = 800, quality = 0.72) {
       canvas.width = Math.round(img.width * scale);
       canvas.height = Math.round(img.height * scale);
       const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#fff"; // las PNG con transparencia quedan con fondo blanco
+      ctx.fillStyle = "#fff"; 
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       let q = quality;

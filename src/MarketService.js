@@ -1,9 +1,7 @@
 import { collection, doc, onSnapshot, addDoc, updateDoc, setDoc, getDoc, query, where, serverTimestamp, writeBatch, Timestamp } from "firebase/firestore";
 import { db } from "./firebase";
 
-/* ---------- Negocios (perfil público) ---------- */
 
-/** Crea el perfil público del negocio si todavía no existe (negocios/{uid}). */
 export async function ensureNegocio(uid, { nombre, categoria }) {
   const ref = doc(db, "negocios", uid);
   if ((await getDoc(ref)).exists()) return;
@@ -13,7 +11,7 @@ export async function ensureNegocio(uid, { nombre, categoria }) {
   });
 }
 
-/** Lista de negocios en tiempo real (la ven todos los clientes). */
+
 export function watchNegocios(onData, onError) {
   return onSnapshot(collection(db, "negocios"), (snap) =>
     onData(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))), onError);
@@ -25,9 +23,6 @@ export function watchNegocio(uid, onData, onError) {
 
 export const updateNegocio = (uid, patch) => updateDoc(doc(db, "negocios", uid), patch);
 
-/* ---------- Pedidos ---------- */
-
-/** field = "clienteId" (mis pedidos) o "negocioId" (pedidos que recibe mi negocio). */
 export function watchOrders(field, uid, onData, onError) {
   return onSnapshot(query(collection(db, "pedidos"), where(field, "==", uid)), (snap) =>
     onData(snap.docs.map((d) => {
@@ -41,13 +36,11 @@ export const createOrder = (order) =>
 
 export const advanceOrder = (id, estado) => updateDoc(doc(db, "pedidos", id), { estado });
 
-/** Existencias después de surtir un pedido (solo productos con control de existencias). */
 export const stockAfter = (products, items) => products.map((p) => {
   const item = items.find((i) => i.id === p.id);
   return item && typeof p.stock === "number" ? { ...p, stock: Math.max(0, p.stock - item.quantity) } : p;
 });
 
-/** Cancela el pedido; si ya se había aceptado, devuelve las existencias al inventario. */
 export async function cancelOrder(order, products, motivo = "", por = "negocio") {
   let updated = products;
   const batch = writeBatch(db);
@@ -60,12 +53,11 @@ export async function cancelOrder(order, products, motivo = "", por = "negocio")
       if (p.stock !== products[i].stock) batch.update(doc(db, "products", p.id), { stock: p.stock });
     });
   }
-  batch.update(doc(db, "pedidos", order.id), { estado: 4, cancelPor: por, motivo }); // el pedido NO se borra: queda con su motivo
+  batch.update(doc(db, "pedidos", order.id), { estado: 4, cancelPor: por, motivo }); 
   await batch.commit();
   return updated;
 }
 
-/** Acepta el pedido y descuenta las existencias en una sola operación. Devuelve el catálogo actualizado. */
 export async function acceptOrder(order, products, opts = {}) {
   const updated = stockAfter(products, order.items);
   const batch = writeBatch(db);
@@ -76,7 +68,7 @@ export async function acceptOrder(order, products, opts = {}) {
   batch.update(doc(db, "pedidos", order.id), {
     estado: 1,
     prepMin,
-    listoEn: Timestamp.fromMillis(Date.now() + prepMin * 60000), // hora estimada de término
+    listoEn: Timestamp.fromMillis(Date.now() + prepMin * 60000), 
     retrasoMin: 0,
     porFinalizar: false,
     aceptadoEn: serverTimestamp(),
@@ -85,11 +77,7 @@ export async function acceptOrder(order, products, opts = {}) {
   return updated;
 }
 
-/* ---------- Tiempos de preparación y validaciones automáticas ---------- */
-
-export const DELIVERY_EXTRA_MIN = 15; // minutos extra si es a domicilio
-
-/** Tiempo estimado: el producto más lento + 2 min por cada unidad extra (+ envío). */
+export const DELIVERY_EXTRA_MIN = 15;
 export function calcPrepMin(items, products, negocio, recoger = false) {
   const base = Number(negocio?.prepBaseMin) > 0 ? Number(negocio.prepBaseMin) : 15;
   let max = 0, units = 0;
@@ -102,7 +90,6 @@ export function calcPrepMin(items, products, negocio, recoger = false) {
   return Math.min(180, Math.round(total));
 }
 
-/** ¿Se puede aceptar solo? Revisa negocio abierto, producto disponible y existencias. */
 export function checkOrder(order, products, negocio) {
   const st = getBusinessStatus(negocio?.horario, negocio?.abierto !== false);
   const abierto = st.estado === "sin-horario" ? negocio?.abierto !== false : st.abierto;
@@ -116,7 +103,6 @@ export function checkOrder(order, products, negocio) {
   return { ok: true };
 }
 
-/** Retraso: suma minutos a la hora estimada de término. */
 export const extendOrder = (order, extraMin) =>
   updateDoc(doc(db, "pedidos", order.id), {
     listoEn: Timestamp.fromMillis((order.listoMs || Date.now()) + extraMin * 60000),
@@ -124,10 +110,8 @@ export const extendOrder = (order, extraMin) =>
     porFinalizar: false,
   });
 
-/** Marca que el tiempo ya se cumplió (aviso al negocio: "programado para finalizar"). */
 export const markFinishing = (id) => updateDoc(doc(db, "pedidos", id), { porFinalizar: true });
 
-/** "Confirmar pedido listo": estado definitivo 2. */
 export const finishOrder = (id) => updateDoc(doc(db, "pedidos", id), { estado: 2, listoReal: serverTimestamp() });
 
 export function friendlyMarketError(e) {
@@ -138,16 +122,6 @@ export function friendlyMarketError(e) {
   }
 }
 
-/* ---------- Estado automático del negocio ---------- */
-
-/**
- * Calcula el estado del negocio usando la zona horaria
- * de Chilpancingo, México.
- *
- * Estados:
- * abierto, cerrado, abre-pronto, cierra-pronto,
- * sin-horario.
- */
 export function getBusinessStatus(horario, manualAbierto = true, fecha = new Date()) {
   if (manualAbierto === false) {
     return {
@@ -216,7 +190,6 @@ export function getBusinessStatus(horario, manualAbierto = true, fecha = new Dat
 
   const intervalos = [];
 
-  // Construir los horarios semanales.
   ids.forEach((id, indice) => {
     const dia = horario[id];
 
@@ -244,7 +217,6 @@ export function getBusinessStatus(horario, manualAbierto = true, fecha = new Dat
 
     let duracion = cierre - apertura;
 
-    // Permitir horarios que terminan al día siguiente.
     if (duracion < 0) {
       duracion += 1440;
     }
@@ -285,7 +257,6 @@ export function getBusinessStatus(horario, manualAbierto = true, fecha = new Dat
     }
   }
 
-  // Prioridad: si está abierto, comprobar si está por cerrar.
   if (minutosParaCerrar !== Infinity) {
     if (minutosParaCerrar <= 10) {
       return {
@@ -303,7 +274,6 @@ export function getBusinessStatus(horario, manualAbierto = true, fecha = new Dat
     };
   }
 
-  // Comprobar si falta poco para la siguiente apertura.
   if (minutosParaAbrir > 0 && minutosParaAbrir <= 10) {
     return {
       estado: "abre-pronto",

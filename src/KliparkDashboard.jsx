@@ -9,12 +9,10 @@ import { watchNegocios, watchNegocio, updateNegocio, watchOrders, createOrder, a
 import { BizTopBar, BizSummary, BizConfirm } from './BusinessView';
 import OrdersBoard, { useNow, fmtLeft, fmtHour } from './OrdersBoard';
 
-// true = las Cloud Functions de Firebase aceptan, programan y notifican los pedidos (ya desplegadas).
-// false = todo lo hace el panel del negocio abierto en el navegador (Fase 1).
 const CLOUD_AUTOMATION = false;
 
-const DELIVERY_FEE = 20; // Envío fijo por ahora
-const FREE_SHIPPING_FROM = 250; // Envío gratis desde este subtotal (pon 0 para desactivar)
+const DELIVERY_FEE = 20; 
+const FREE_SHIPPING_FROM = 250; 
 const statusLabels = ['Esperando aceptación', 'En preparación', 'Listo para entregar', 'Entregado', 'Cancelado'];
 const ICONS = { Comida: Utensils, Bebidas: Coffee, Postres: CakeSlice };
 const COVERS = { Postres: 'cake', Bebidas: 'coffee' };
@@ -22,7 +20,6 @@ const soldOut = p => !p.available || (typeof p.stock === 'number' && p.stock <= 
 const decorate = n => ({ ...n, Icon: ICONS[n.categoria] || Store, cover: COVERS[n.categoria] || '' });
 const money = value => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 }).format(value);
 
-// ids SIN acento, igual que en la base de datos
 const DIAS_RESUMEN = [
   { id: 'lunes', nombre: 'Lun' },
   { id: 'martes', nombre: 'Mar' },
@@ -49,7 +46,6 @@ function Intro({ title, subtitle, children }) {
   return <div className="intro"><div><h1>{title}</h1><p className="muted">{subtitle}</p></div>{children}</div>;
 }
 
-/* Galería simple con cambio automático (portada de la tienda) */
 function Gallery({ photos, fallback: Fallback }) {
   const [i, setI] = useState(0);
   const n = photos.length;
@@ -69,7 +65,6 @@ function Gallery({ photos, fallback: Fallback }) {
   );
 }
 
-/* Portada de la pantalla de la tienda */
 function StoreHero({ store, products, onBack, canOrder }) {
   const Icon = store.Icon || Store;
   const photos = [store.portada, ...(products || []).filter(p => p.imagen).map(p => p.imagen)].filter(Boolean).slice(0, 5);
@@ -119,18 +114,18 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
   const role = accountRole === 'negocio' ? 'business' : 'client';
   const guest = accountRole === 'invitado';
   const uid = profile.uid;
-  const [me, setMe] = useState(profile); // datos del usuario (se actualizan al editar el perfil)
+  const [me, setMe] = useState(profile); 
   const [page, setPage] = useState(role === 'business' ? 'Resumen' : 'Explorar');
-  const [negocios, setNegocios] = useState(null);      // todos los negocios (cliente)
-  const [myNegocio, setMyNegocio] = useState(null);    // mi negocio (negocio)
+  const [negocios, setNegocios] = useState(null);     
+  const [myNegocio, setMyNegocio] = useState(null);    
   const [orders, setOrders] = useState([]);
-  const [products, setProducts] = useState(null);      // productos de mi negocio
+  const [products, setProducts] = useState(null);     
   const [productsError, setProductsError] = useState('');
   const [storeId, setStoreId] = useState(null);
   const [storeProducts, setStoreProducts] = useState(null);
-  const [storeModal, setStoreModal] = useState(false);   // ventana grande del menú de un local
-  const [covers, setCovers] = useState({});            // fotos de productos por negocio
-  const [dishes, setDishes] = useState({});            // platillos con foto por negocio (para el carrusel)
+  const [storeModal, setStoreModal] = useState(false);   
+  const [covers, setCovers] = useState({});            
+  const [dishes, setDishes] = useState({});           
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('Todo');
   const [cart, setCart] = useState(null);
@@ -138,12 +133,11 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
   const [notice, setNotice] = useState('');
   const [sending, setSending] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
-  const [railOpen, setRailOpen] = useState(false);   // menú lateral expandido (táctil)
-  const [toCancel, setToCancel] = useState(null); // pedido pendiente de confirmar cancelación
+  const [railOpen, setRailOpen] = useState(false);   
+  const [toCancel, setToCancel] = useState(null);
   const fail = e => setNotice(friendlyMarketError(e));
 
-  // Pedidos automáticos: el negocio los activa o desactiva (negocios/{uid}.autoPedidos)
-  const [autoFailed, setAutoFailed] = useState([]);   // pedidos que no se pudieron aceptar solos
+  const [autoFailed, setAutoFailed] = useState([]);   
   const [autoTick, setAutoTick] = useState(0);
   const autoBusy = useRef(false);
   const autoTried = useRef(new Set());
@@ -192,16 +186,16 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
         const check = checkOrder(next, products, myNegocio);
         if (check.ok) {
           const prepMin = calcPrepMin(next.items, products, myNegocio, next.recoger);
-          setProducts(await acceptOrder(next, products, { prepMin })); // valida, descuenta existencias y pasa a "En preparación"
+          setProducts(await acceptOrder(next, products, { prepMin })); 
           setNotice(`Pedido #${next.id.slice(0, 6).toUpperCase()} aceptado automáticamente (${prepMin} min).`);
         } else if (check.tipo === 'cerrado' && autoTotal) {
-          setProducts(await cancelOrder(next, products, check.motivo, 'sistema')); // modo completo: se cancela con aviso al cliente
+          setProducts(await cancelOrder(next, products, check.motivo, 'sistema'));
           setNotice(`Pedido #${next.id.slice(0, 6).toUpperCase()} cancelado: ${check.motivo}`);
         } else if (check.tipo === 'cerrado') {
-          setAutoFailed(list => [...list, next.id]); // queda pendiente para decisión del negocio
+          setAutoFailed(list => [...list, next.id]); 
           setNotice(`Pedido #${next.id.slice(0, 6).toUpperCase()} recibido con el negocio cerrado. Decide si lo aceptas.`);
         } else {
-          setProducts(await cancelOrder(next, products, check.motivo, 'sistema')); // se conserva con su motivo
+          setProducts(await cancelOrder(next, products, check.motivo, 'sistema'));
           setNotice(`Pedido #${next.id.slice(0, 6).toUpperCase()} cancelado: ${check.motivo}`);
         }
       } catch (e) {
@@ -214,7 +208,7 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
     })();
   }, [role, orders, products, myNegocio, autoAccept, autoTotal, autoTick]);
 
-  // Modo automático completo: al terminar el tiempo pasa a "Listo"; 30 min después se cierra como entregado
+
   const ordersRef = useRef(orders);
   ordersRef.current = orders;
   const autoMoved = useRef(new Set());
@@ -247,13 +241,13 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
     setStoreProducts(null);
     listProducts(storeId).then(setStoreProducts).catch(e => { setStoreProducts([]); fail(e); });
   }, [page, storeId, storeModal]);
-  // los avisos desaparecen solos
+ 
   useEffect(() => {
     if (!notice) return;
     const t = setTimeout(() => setNotice(''), 4500);
     return () => clearTimeout(t);
   }, [notice]);
-  // Trae hasta 4 fotos de productos por negocio para las tarjetas
+
   useEffect(() => {
     if (role !== 'client' || !negocios) return;
     let alive = true;
@@ -283,7 +277,6 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
   const low = (products || []).filter(p => typeof p.stock === 'number' && p.stock <= lowLimit);
   const visible = (negocios || []).filter(n => (category === 'Todo' || n.categoria === category) && (n.nombre || '').toLocaleLowerCase('es').includes(query.toLocaleLowerCase('es')));
 
-  // Platillos para el carrusel: se intercalan los locales (1.º de cada uno, luego 2.º…) para dar variedad
   const carouselDishes = (() => {
     const lists = (visible || []).map(n => dishes[n.id] || []);
     const out = [];
@@ -329,7 +322,7 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
     try {
       if (order.estado === 0 && products) {
         const prepMin = calcPrepMin(order.items, products, myNegocio, order.recoger);
-        setProducts(await acceptOrder(order, products, { prepMin })); // acepta y descuenta existencias
+        setProducts(await acceptOrder(order, products, { prepMin })); 
       } else if (order.estado === 1) await finishOrder(order.id);
       else await advanceOrder(order.id, order.estado + 1);
     } catch (e) { fail(e); }
@@ -429,7 +422,6 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
     />
   ) : null;
 
-  // Resumen y Pedidos del negocio: diseño nuevo (fuera de #cerca-pro, igual que el panel del cliente)
   if (role === 'business' && (page === 'Resumen' || page === 'Pedidos' || page === 'Mi negocio' || page === 'Productos')) {
     return <>
       {bizTopBar}
@@ -506,7 +498,6 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
     </>;
   }
 
-  // Mis pedidos del cliente: mismo diseño que Explorar
   if (role === 'client' && page === 'Mi pedido') {
     return <>
       {topBar}
@@ -521,7 +512,6 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
     </>;
   }
 
-  // Mi perfil del cliente: mismo diseño que Explorar
   if (role === 'client' && page === 'Mi perfil' && !guest) {
     return <>
       {topBar}
@@ -536,7 +526,6 @@ export default function KliparkDashboard({ accountRole, profile = {}, onLogout, 
     </>;
   }
 
-  // Pantalla Explorar del cliente: FUERA de #cerca-pro para que tu CSS viejo no la afecte
   if (role === 'client' && page === 'Explorar') {
     return <>
       {topBar}
