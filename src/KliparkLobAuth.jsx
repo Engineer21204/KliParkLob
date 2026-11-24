@@ -11,7 +11,6 @@ const BTN = "flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-
 const BTN_GHOST = "flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-gray-200 bg-white/90 px-5 py-3.5 font-display text-[15px] font-bold text-brand-charcoal transition hover:border-brand-coral/50 active:scale-[0.98] disabled:opacity-60";
 const LINK = "font-bold text-brand-coral underline underline-offset-2 hover:text-brand-coralDark";
 
-
 function Logo({ small = false }) {
   return (
     <div className="flex items-center gap-3">
@@ -111,7 +110,7 @@ function Segmented({ role, setRole }) {
     <div role="group" aria-label="Tipo de cuenta" className="mb-5 grid grid-cols-2 gap-1 rounded-2xl border border-gray-200 bg-gray-100/80 p-1">
       {[["cliente", "Soy cliente"], ["negocio", "Soy negocio"]].map(([v, l]) => (
         <button key={v} type="button" aria-pressed={role === v} onClick={() => setRole(v)}
-          className={`rounded-xl py-2.5 text-sm font-bold transition ${role === v ? "bg-brand-charcoal text-white shadow" : "text-gray-600 hover:bg-white/70"}`}>{l}</button>
+          className={`rounded-xl py-2.5 text-center text-sm font-bold transition ${role === v ? "bg-brand-charcoal text-white shadow" : "text-gray-600 hover:bg-white/70"}`}>{l}</button>
       ))}
     </div>
   );
@@ -306,7 +305,7 @@ function Phone({ go, role, setRole }) {
 
 function Complete({ go, ctx, role: roleProp, setRole }) {
   const u = ctx.user || {};
-  const fixed = ctx.role;
+  const fixed = ctx.role; 
   const [role, setLocal] = useState(fixed || roleProp || "cliente");
   const [f, setF] = useState({ nombre: u.nombre || "", categoria: "", cel: u.cel || "" });
   const [err, setErr] = useState({});
@@ -358,7 +357,7 @@ function Forgot({ go }) {
     e.preventDefault();
     if (!emailOk(email)) return setErr("Escribe un correo válido.");
     try { await resetPassword(email); } catch (ex) {
-      if (ex.code !== "auth/user-not-found") return setErr(friendlyError(ex)); 
+      if (ex.code !== "auth/user-not-found") return setErr(friendlyError(ex)); // por privacidad no revelamos si existe
     }
     setOk(true);
   };
@@ -395,6 +394,7 @@ function Done({ ctx, role, finish }) {
     </div>
   );
 }
+
 export default function KliparkLobAuth({ initialScreen = "welcome", onAuth = () => {} }) {
   const [screen, setScreen] = useState(initialScreen);
   const [role, setRole] = useState("cliente");

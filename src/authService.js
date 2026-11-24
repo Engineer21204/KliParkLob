@@ -55,6 +55,7 @@ export async function registerUser({ role, nombre, email, cel, categoria, pass }
   }
 }
 
+
 export async function loginUser(email, pass, expectedRole) {
   const cred = await signInWithEmailAndPassword(auth, email.trim(), pass);
   const profile = await getProfile(cred.user.uid);
@@ -129,6 +130,7 @@ export async function completeProfile({ role, nombre, categoria, cel }) {
 export const resetPassword = (email) => sendPasswordResetEmail(auth, email.trim());
 export const logout = () => signOut(auth);
 
+
 export function friendlyError(e) {
   switch (e?.code) {
     case "auth/invalid-credential":
@@ -149,6 +151,8 @@ export function friendlyError(e) {
     case "auth/popup-closed-by-user":
     case "auth/cancelled-popup-request":
       return "Cerraste la ventana de Google antes de terminar.";
+    case "auth/unauthorized-domain":
+      return "Este sitio aún no está autorizado en Firebase. Agrega el dominio en Authentication → Settings → Authorized domains.";
     case "auth/popup-blocked":
       return "El navegador bloqueó la ventana de Google. Permite las ventanas emergentes.";
     case "auth/account-exists-with-different-credential":
